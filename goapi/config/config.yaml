@@ -1,0 +1,25 @@
+# Server Configuration
+server:
+  port: 6060
+  mode: "debug" # gin mode: debug, test, release
+
+# Database Configuration
+database:
+  host: "localhost"
+  port: 3306
+  user: "dog"
+  password: "123456" # Use environment variables for production passwords
+  dbname: "sms_platform"
+
+# Redis Configuration
+redis:
+  host: "localhost"
+  port: 6379
+  password: "" # Use environment variables for production passwords
+  db: 0
+
+# JWT Configuration
+jwt:
+  secret: "a_very_secret_key" # Change this in production
+  client_token_expiry: 259200   # 客户端JWT过期时间 (72小时 = 72 * 60 * 60 = 259200秒)
+  api_token_expiry: 1800         # API Token过期时间 (30分钟 = 30 * 60 = 1800秒)

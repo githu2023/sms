@@ -1,0 +1,109 @@
+package api
+
+import (
+	"sms-platform/goapi/internal/api/handler"
+	"sms-platform/goapi/internal/api/middleware"
+	"sms-platform/goapi/internal/config"
+	"sms-platform/goapi/internal/repository"
+	"sms-platform/goapi/internal/service"
+
+	"github.com/gin-gonic/gin"
+)
+
+// NewRouter creates and configures a new Gin router.
+func NewRouter(cfg config.Config) *gin.Engine { // Pass config to router
+	// Set Gin mode from config
+	gin.SetMode(cfg.Server.Mode)
+	router := gin.New()
+
+	// Global Middleware
+	router.Use(gin.Logger())   // Standard logger
+	router.Use(gin.Recovery()) // Recover from panics
+	router.Use(middleware.RequestID())
+
+	// Health check endpoint
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "UP"})
+	})
+
+	// --- Initialize Repositories ---
+	db := repository.GetDB() // GetDB() is safe to call here as InitDB has been called in main.go
+	customerRepo := repository.NewCustomerRepository(db)
+	businessTypeRepo := repository.NewBusinessTypeRepository(db)
+	transactionRepo := repository.NewTransactionRepository(db)
+	logRepo := repository.NewLogRepository(db)
+	providerRepo := repository.NewProviderRepository(db)
+	assignmentRepo := repository.NewPhoneAssignmentRepository(db)
+	whitelistRepo := repository.NewWhitelistRepository(db)
+
+	// --- Initialize Services ---
+	userService := service.NewUserService(customerRepo, cfg.JWT)
+	businessService := service.NewBusinessService(businessTypeRepo)
+	transactionService := service.NewTransactionService(transactionRepo)
+	thirdPartyService := service.NewThirdPartyService()
+	phoneService := service.NewPhoneService(thirdPartyService, transactionRepo, logRepo, db)
+	assignmentService := service.NewAssignmentService(assignmentRepo, businessTypeRepo, providerRepo)
+	whitelistService := service.NewWhitelistService(whitelistRepo)
+
+	// --- Initialize Handlers ---
+	userHandler := handler.NewUserHandler(userService, cfg.JWT)
+	businessHandler := handler.NewBusinessHandler(businessService)
+	authHandler := handler.NewAuthHandler(userService, cfg.JWT)
+	balanceHandler := handler.NewBalanceHandler(transactionService)
+	phoneHandler := handler.NewPhoneHandler(phoneService)
+	assignmentHandler := handler.NewAssignmentHandler(assignmentService)
+	whitelistHandler := handler.NewWhitelistHandler(whitelistService)
+
+	// --- API Groups ---
+
+	// Client API Group (for Flutter app)
+	clientV1 := router.Group("/client/v1")
+	{
+		clientV1.POST("/register", userHandler.Register)
+		clientV1.POST("/login", userHandler.Login)
+		clientV1.GET("/business_types", businessHandler.GetBusinessTypes)
+
+		// Authenticated routes for clientV1
+		clientAuth := clientV1.Group("/")
+		clientAuth.Use(middleware.JWTAuthMiddleware(cfg.JWT.Secret))
+		{
+			clientAuth.GET("/profile", userHandler.GetProfile)
+			clientAuth.POST("/change_password", userHandler.UpdatePassword) // New
+			clientAuth.GET("/balance", balanceHandler.GetBalance)           // New
+			clientAuth.POST("/get_phone", phoneHandler.GetPhone)            // New
+			clientAuth.POST("/get_code", phoneHandler.GetCode)              // New
+			clientAuth.GET("/phone_status", phoneHandler.GetPhoneStatus)    // New
+			clientAuth.GET("/assignments", assignmentHandler.GetAssignments)
+			clientAuth.GET("/assignments/statistics", assignmentHandler.GetCostStatistics)
+			// 白名单相关接口
+			clientAuth.GET("/whitelist", whitelistHandler.ListWhitelists)
+			clientAuth.POST("/whitelist", whitelistHandler.AddWhitelist)
+			clientAuth.DELETE("/whitelist", whitelistHandler.DeleteWhitelist)
+		}
+	}
+
+	// Programmatic API Group (for other apps/scripts)
+	apiV1 := router.Group("/api/v1")
+	{
+		apiV1.POST("/get_token", authHandler.GetAPIToken) // New
+
+		// Authenticated routes for apiV1
+		apiAuth := apiV1.Group("/")
+		apiAuth.Use(middleware.APITokenAuthMiddleware(cfg.JWT.Secret)) // New
+		{
+			apiAuth.GET("/business_types", businessHandler.GetBusinessTypes) // This route should also be authenticated
+			apiAuth.GET("/balance", balanceHandler.GetBalance)               // New
+			apiAuth.POST("/get_phone", phoneHandler.GetPhone)                // New
+			apiAuth.POST("/get_code", phoneHandler.GetCode)                  // New
+			apiAuth.GET("/phone_status", phoneHandler.GetPhoneStatus)        // New
+			apiAuth.GET("/assignments", assignmentHandler.GetAssignments)
+			apiAuth.GET("/assignments/statistics", assignmentHandler.GetCostStatistics)
+			// 白名单相关接口
+			apiAuth.GET("/whitelist", whitelistHandler.ListWhitelists)
+			apiAuth.POST("/whitelist", whitelistHandler.AddWhitelist)
+			apiAuth.DELETE("/whitelist", whitelistHandler.DeleteWhitelist)
+		}
+	}
+
+	return router
+}
