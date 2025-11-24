@@ -67,6 +67,15 @@ func (s *smsPhoneAssignments) GetSmsPhoneAssignmentsInfoList(ctx context.Context
     if info.PhoneNumber != nil && *info.PhoneNumber != "" {
         db = db.Where("phone_number = ?", *info.PhoneNumber)
     }
+    if info.MerchantNo != nil && *info.MerchantNo != "" {
+        db = db.Where("merchant_no = ?", *info.MerchantNo)
+    }
+    if info.BusinessCode != nil && *info.BusinessCode != "" {
+        db = db.Where("business_code = ?", *info.BusinessCode)
+    }
+    if info.Status != nil && *info.Status != "" {
+        db = db.Where("status = ?", *info.Status)
+    }
 	err = db.Count(&total).Error
 	if err!=nil {
     	return
