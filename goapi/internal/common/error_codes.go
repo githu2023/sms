@@ -43,6 +43,9 @@ const (
 	CodeUserExists          ErrorCode = 60901 // 用户已存在
 	CodeInvalidCredentials  ErrorCode = 61001 // 用户名或密码错误
 	CodePhoneNumberExpired  ErrorCode = 61101 // 手机号分配已过期 (Added)
+	CodeProviderNotFound    ErrorCode = 61201 // 服务商未找到或未启用
+	CodeProviderBusinessNotFound ErrorCode = 61202 // 服务商业务类型未配置
+	CodeNoProviderAvailable ErrorCode = 61203 // 没有可用的服务商
 )
 
 // Error 实现 error 接口
@@ -72,6 +75,9 @@ func (e ErrorCode) Message() string {
 		CodeUserExists:          "用户已存在",
 		CodeInvalidCredentials:  "用户名或密码错误",
 		CodePhoneNumberExpired:  "手机号分配已过期", // Added
+		CodeProviderNotFound:    "服务商未找到或未启用",
+		CodeProviderBusinessNotFound: "服务商业务类型未配置",
+		CodeNoProviderAvailable: "没有可用的服务商",
 	}
 
 	if msg, ok := messages[e]; ok {

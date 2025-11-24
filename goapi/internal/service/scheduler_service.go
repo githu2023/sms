@@ -254,6 +254,11 @@ func (s *SchedulerService) markAssignmentAsExpired(ctx context.Context, assignme
 	} else {
 		log.Printf("Assignment %d marked as expired due to timeout", assignment.ID)
 	}
+
+	// 释放手机号
+	if assignment.PhoneNumber != nil {
+		s.releasePhoneNumber(ctx, assignment)
+	}
 }
 
 // getPhoneNumber 安全获取手机号字符串
@@ -297,7 +302,15 @@ func (s *SchedulerService) tryGetCode(ctx context.Context, assignment *domain.Ph
 	defer cancel()
 
 	// 调用provider接口获取验证码
-	codeResponse, err := providerInstance.GetCode(codeCtx, *assignment.PhoneNumber, 10*time.Second)
+	// 如果数据库中有 extId，优先使用 extId
+	var codeResponse *provider.CodeResponse
+	if assignment.ExtId != nil && *assignment.ExtId != "" {
+		// 使用 extId 获取验证码
+		codeResponse, err = providerInstance.GetCode(codeCtx, *assignment.PhoneNumber, 10*time.Second, *assignment.ExtId)
+	} else {
+		// 使用 phoneNumber 获取验证码（兼容旧数据）
+		codeResponse, err = providerInstance.GetCode(codeCtx, *assignment.PhoneNumber, 10*time.Second)
+	}
 	if err != nil {
 		// 记录错误但不标记为失败，等待下次检查
 		if assignment.FetchCount == nil {
@@ -344,6 +357,59 @@ func (s *SchedulerService) updateAssignmentWithCode(ctx context.Context, assignm
 		log.Printf("Error updating assignment %d with code: %v", assignment.ID, err)
 	} else {
 		log.Printf("Assignment %d successfully updated with verification code", assignment.ID)
+	}
+
+	// 释放手机号
+	if assignment.PhoneNumber != nil {
+		s.releasePhoneNumber(ctx, assignment)
+	}
+}
+
+// releasePhoneNumber 释放手机号
+func (s *SchedulerService) releasePhoneNumber(ctx context.Context, assignment *domain.PhoneAssignment) {
+	if assignment.PhoneNumber == nil {
+		return
+	}
+
+	// 获取provider实例
+	if assignment.ProviderID == nil {
+		log.Printf("Assignment %d has no provider ID, cannot release phone", assignment.ID)
+		return
+	}
+
+	// 通过ProviderID查询Provider信息获取ProviderCode
+	providerInfo, err := s.providerRepo.FindByID(ctx, int(*assignment.ProviderID))
+	if err != nil {
+		log.Printf("Error finding provider %d for assignment %d to release phone: %v", *assignment.ProviderID, assignment.ID, err)
+		return
+	}
+
+	if providerInfo.Code == nil {
+		log.Printf("Provider %d has no code, cannot release phone for assignment %d", *assignment.ProviderID, assignment.ID)
+		return
+	}
+
+	// 从全局ProviderManager获取provider对象
+	providerManager := global.GetProviderManager()
+	providerInstance, err := providerManager.GetProviderByCode(*providerInfo.Code)
+	if err != nil {
+		log.Printf("Error getting provider instance for code %s to release phone: %v", *providerInfo.Code, err)
+		return
+	}
+
+	// 调用ReleasePhone释放手机号
+	// 如果数据库中有 extId，优先使用 extId（对于 BigBus666 等需要 extId 的运营商）
+	releaseCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	// ReleasePhone 接口只接收 phoneNumber，但内部会查找 extId
+	// 如果 extId 在数据库中，Provider 应该能够从数据库中恢复映射关系
+	// 或者我们需要修改 ReleasePhone 接口支持 extId 参数
+	// 目前先使用 phoneNumber，Provider 内部会处理
+	if err := providerInstance.ReleasePhone(releaseCtx, *assignment.PhoneNumber); err != nil {
+		log.Printf("Error releasing phone %s for assignment %d: %v", *assignment.PhoneNumber, assignment.ID, err)
+	} else {
+		log.Printf("Successfully released phone %s for assignment %d", *assignment.PhoneNumber, assignment.ID)
 	}
 }
 

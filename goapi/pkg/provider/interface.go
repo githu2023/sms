@@ -17,7 +17,8 @@ type SMSProvider interface {
 	// GetCode retrieves SMS verification code for a specific phone number
 	// phoneNumber: the phone number to receive SMS
 	// timeout: maximum time to wait for the code
-	GetCode(ctx context.Context, phoneNumber string, timeout time.Duration) (*CodeResponse, error)
+	// extId: optional external ID from provider (e.g., extId for BigBus666), if provided, will be used instead of phoneNumber lookup
+	GetCode(ctx context.Context, phoneNumber string, timeout time.Duration, extId ...string) (*CodeResponse, error)
 
 	// GetProviderInfo returns provider metadata and configuration
 	GetProviderInfo() *ProviderInfo
@@ -27,6 +28,9 @@ type SMSProvider interface {
 
 	// SetHealthy allows manual control of provider health status (primarily for testing)
 	SetHealthy(healthy bool)
+
+	// release phone number
+	ReleasePhone(ctx context.Context, phoneNumber string) error
 }
 
 // PhoneResponse represents the response from GetPhone request
@@ -36,6 +40,7 @@ type PhoneResponse struct {
 	Cost        float64   `json:"cost"`         // Cost for this phone number
 	ValidUntil  time.Time `json:"valid_until"`  // When this assignment expires
 	ProviderID  string    `json:"provider_id"`  // ID of the provider that supplied this number
+	ExtId       string    `json:"ext_id"`       // External ID from provider (e.g., extId for BigBus666), used for getting code and releasing phone
 }
 
 // CodeResponse represents the response from GetCode request

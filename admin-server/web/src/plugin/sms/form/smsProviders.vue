@@ -12,6 +12,17 @@
         <el-form-item label="是否启用" prop="isEnabled">
           <el-switch v-model="formData.isEnabled" active-color="#13ce66" inactive-color="#ff4949" active-text="是" inactive-text="否" clearable ></el-switch>
        </el-form-item>
+        <el-form-item label="额外配置(JSON)" prop="extraConfig">
+          <el-input 
+            v-model="formData.extraConfigText" 
+            type="textarea" 
+            rows="6" 
+            placeholder='请输入JSON格式配置，例如: {"projectName": "hema"}' 
+            @blur="validateJSON"
+          />
+          <div v-if="jsonError" class="text-red-500 text-xs mt-1">{{ jsonError }}</div>
+          <div v-else class="text-gray-500 text-xs mt-1">支持JSON格式，用于存储特殊配置如projectName等</div>
+       </el-form-item>
         <el-form-item>
           <el-button :loading="btnLoading" type="primary" @click="save">保存</el-button>
           <el-button type="primary" @click="back">返回</el-button>
@@ -51,7 +62,43 @@ const formData = ref({
             name: '',
             apiConfig: '',
             isEnabled: false,
+            extraConfig: null,
+            extraConfigText: '', // 用于编辑的文本字段
         })
+
+// JSON验证错误
+const jsonError = ref('')
+
+// 验证JSON格式
+const validateJSON = () => {
+    if (!formData.value.extraConfigText || formData.value.extraConfigText.trim() === '') {
+        formData.value.extraConfig = null
+        jsonError.value = ''
+        return true
+    }
+    try {
+        const parsed = JSON.parse(formData.value.extraConfigText)
+        formData.value.extraConfig = parsed
+        jsonError.value = ''
+        return true
+    } catch (e) {
+        jsonError.value = 'JSON格式错误: ' + e.message
+        return false
+    }
+}
+
+// 将extraConfig对象转换为文本
+const extraConfigToText = (config) => {
+    if (!config || Object.keys(config).length === 0) {
+        return ''
+    }
+    try {
+        return JSON.stringify(config, null, 2)
+    } catch (e) {
+        return ''
+    }
+}
+
 // 验证规则
 const rule = reactive({
 })
@@ -65,6 +112,8 @@ const init = async () => {
       const res = await findSmsProviders({ ID: route.query.id })
       if (res.code === 0) {
         formData.value = res.data
+        // 将extraConfig对象转换为文本用于编辑
+        formData.value.extraConfigText = extraConfigToText(res.data.extraConfig)
         type.value = 'update'
       }
     } else {
@@ -75,19 +124,33 @@ const init = async () => {
 init()
 // 保存按钮
 const save = async() => {
+      // 先验证JSON
+      if (!validateJSON()) {
+          ElMessage({
+              type: 'error',
+              message: '请修正JSON格式错误'
+          })
+          return
+      }
+      
       btnLoading.value = true
       elFormRef.value?.validate( async (valid) => {
          if (!valid) return btnLoading.value = false
+         
+         // 准备提交的数据，移除临时文本字段
+         const submitData = { ...formData.value }
+         delete submitData.extraConfigText
+         
             let res
            switch (type.value) {
              case 'create':
-               res = await createSmsProviders(formData.value)
+               res = await createSmsProviders(submitData)
                break
              case 'update':
-               res = await updateSmsProviders(formData.value)
+               res = await updateSmsProviders(submitData)
                break
              default:
-               res = await createSmsProviders(formData.value)
+               res = await createSmsProviders(submitData)
                break
            }
            btnLoading.value = false

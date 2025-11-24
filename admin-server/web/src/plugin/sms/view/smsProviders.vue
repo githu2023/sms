@@ -134,6 +134,17 @@
              <el-form-item label="备注" prop="remark">
     <el-input v-model="formData.remark" type="textarea" rows="3" placeholder="请输入备注信息" />
 </el-form-item>
+             <el-form-item label="额外配置(JSON)" prop="extraConfig">
+    <el-input 
+      v-model="formData.extraConfigText" 
+      type="textarea" 
+      rows="6" 
+      placeholder='请输入JSON格式配置，例如: {"projectName": "hema"}' 
+      @blur="validateJSON"
+    />
+    <div v-if="jsonError" class="text-red-500 text-xs mt-1">{{ jsonError }}</div>
+    <div v-else class="text-gray-500 text-xs mt-1">支持JSON格式，用于存储特殊配置如projectName等</div>
+</el-form-item>
           </el-form>
     </el-drawer>
 
@@ -156,6 +167,10 @@
 </el-descriptions-item>
                  <el-descriptions-item label="备注">
     {{ detailForm.remark }}
+</el-descriptions-item>
+                 <el-descriptions-item label="额外配置">
+    <div v-if="detailForm.extraConfig" class="whitespace-pre-wrap font-mono text-sm">{{ JSON.stringify(detailForm.extraConfig, null, 2) }}</div>
+    <span v-else class="text-gray-400">无</span>
 </el-descriptions-item>
             </el-descriptions>
         </el-drawer>
@@ -200,7 +215,12 @@ const formData = ref({
             merchantKey: '',
             status: true,
             remark: '',
+            extraConfig: null,
+            extraConfigText: '', // 用于编辑的文本字段
         })
+
+// JSON验证错误
+const jsonError = ref('')
 
 
 
@@ -321,12 +341,44 @@ const onDelete = async() => {
 // 行为控制标记（弹窗内部需要增还是改）
 const type = ref('')
 
+// 验证JSON格式
+const validateJSON = () => {
+    if (!formData.value.extraConfigText || formData.value.extraConfigText.trim() === '') {
+        formData.value.extraConfig = null
+        jsonError.value = ''
+        return true
+    }
+    try {
+        const parsed = JSON.parse(formData.value.extraConfigText)
+        formData.value.extraConfig = parsed
+        jsonError.value = ''
+        return true
+    } catch (e) {
+        jsonError.value = 'JSON格式错误: ' + e.message
+        return false
+    }
+}
+
+// 将extraConfig对象转换为文本
+const extraConfigToText = (config) => {
+    if (!config || Object.keys(config).length === 0) {
+        return ''
+    }
+    try {
+        return JSON.stringify(config, null, 2)
+    } catch (e) {
+        return ''
+    }
+}
+
 // 更新行
 const updateSmsProvidersFunc = async(row) => {
     const res = await findSmsProviders({ ID: row.ID })
     type.value = 'update'
     if (res.code === 0) {
         formData.value = res.data
+        // 将extraConfig对象转换为文本用于编辑
+        formData.value.extraConfigText = extraConfigToText(res.data.extraConfig)
         dialogFormVisible.value = true
     }
 }
@@ -353,6 +405,8 @@ const dialogFormVisible = ref(false)
 // 打开弹窗
 const openDialog = () => {
     type.value = 'create'
+    formData.value.extraConfigText = ''
+    jsonError.value = ''
     dialogFormVisible.value = true
 }
 
@@ -367,23 +421,40 @@ const closeDialog = () => {
         merchantKey: '',
         status: true,
         remark: '',
+        extraConfig: null,
+        extraConfigText: '',
         }
+    jsonError.value = ''
 }
 // 弹窗确定
 const enterDialog = async () => {
+     // 先验证JSON
+     if (!validateJSON()) {
+         ElMessage({
+             type: 'error',
+             message: '请修正JSON格式错误'
+         })
+         return
+     }
+     
      btnLoading.value = true
      elFormRef.value?.validate( async (valid) => {
              if (!valid) return btnLoading.value = false
+              
+              // 准备提交的数据，移除临时文本字段
+              const submitData = { ...formData.value }
+              delete submitData.extraConfigText
+              
               let res
               switch (type.value) {
                 case 'create':
-                  res = await createSmsProviders(formData.value)
+                  res = await createSmsProviders(submitData)
                   break
                 case 'update':
-                  res = await updateSmsProviders(formData.value)
+                  res = await updateSmsProviders(submitData)
                   break
                 default:
-                  res = await createSmsProviders(formData.value)
+                  res = await createSmsProviders(submitData)
                   break
               }
               btnLoading.value = false

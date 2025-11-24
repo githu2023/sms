@@ -15,8 +15,8 @@ const (
 	BaseURL         = "http://localhost:6060"
 	TestUser        = "testuser_1763969884"
 	TestPassword    = "TestPassword123!"
-	APISecret       = "431915928ea2df20f0a3af17921dac2efee5c63d46191927ac781e528e3fd0a5"
-	MerchantNo      = "368570"
+	APISecret       = "363dbbc5a6519dcf604579f57f2ef87f6b405f40aceef7db01f1ede27f18f7fd"
+	MerchantNo      = "532401"
 	ClientAPIPrefix = "/client/v1"
 	APIPrefix       = "/api/v1"
 )
@@ -370,10 +370,10 @@ func main() {
 			return
 		case "code":
 			// 只测试获取验证码（需要先有手机号）
-		if len(os.Args) < 3 {
-			fmt.Println("用法: go run api_tester.go code <phone_number>")
-			return
-		}
+			if len(os.Args) < 3 {
+				fmt.Println("用法: go run api_tester.go code <phone_number>")
+				return
+			}
 			if err := testGetAPIToken(); err != nil {
 				fmt.Printf("❌ %v\n", err)
 				return

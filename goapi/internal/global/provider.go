@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"sms-platform/goapi/internal/domain"
 	"sms-platform/goapi/pkg/provider"
+	"strings"
 	"sync"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -78,9 +80,68 @@ func InitProviderManager(db *gorm.DB, providerRepo ProviderRepository, providerB
 			}
 
 			// 根据运营商类型创建对应的provider实例
-			// 使用本地Provider实现，从数据库读取配置
-			providerInstance := provider.NewLocalProvider(*p.Code, *p.Name, 100, businessTypeConfigs)
-			providerManager.RegisterProvider(*p.Code, providerInstance)
+			var providerInstance provider.SMSProvider
+
+			// 判断运营商类型：如果 Code 是 "bigbus666" 或包含 "bigbus"，则使用 BigBus666Provider
+			providerCode := *p.Code
+			if providerCode == "bigbus666" || contains(providerCode, "bigbus") {
+				// 创建 BigBus666Provider
+				// 从数据库字段读取配置：
+				// - APIGateway: api_gateway 字段
+				// - CustomerOutNumber: merchant_id 字段
+				// - EncryptKey: merchant_key 字段
+				// - ProjectName: extra_config JSON 字段中的 projectName
+				apiGateway := ""
+				if p.APIGateway != nil {
+					apiGateway = *p.APIGateway
+				}
+				customerOutNumber := ""
+				if p.MerchantID != nil {
+					customerOutNumber = *p.MerchantID
+				}
+				encryptKey := ""
+				if p.MerchantKey != nil {
+					encryptKey = *p.MerchantKey
+				}
+
+				// 从 ExtraConfig 中读取特殊配置
+				projectName := "hema" // 默认值
+				if p.ExtraConfig != nil {
+					if pn, ok := (*p.ExtraConfig)["projectName"].(string); ok && pn != "" {
+						projectName = pn
+					}
+				}
+
+				// 验证必要配置
+				if apiGateway == "" || customerOutNumber == "" || encryptKey == "" {
+					fmt.Printf("Warning: BigBus666 provider %s missing required config (api_gateway, merchant_id, or merchant_key), skipping\n", providerCode)
+					continue
+				}
+
+				// 获取成本（从业务类型配置中获取，或使用默认值）
+				costPerSMS := 1.0
+				if len(businessTypeConfigs) > 0 && businessTypeConfigs[0].Price > 0 {
+					costPerSMS = businessTypeConfigs[0].Price
+				}
+
+				providerInstance = provider.NewBigBus666Provider(provider.BigBus666Config{
+					ID:                 providerCode,
+					Name:               getStringValue(p.Name, "BigBus666"),
+					APIGateway:         apiGateway,
+					CustomerOutNumber:  customerOutNumber,
+					EncryptKey:         encryptKey,
+					ProjectName:        projectName, // 从 ExtraConfig 读取
+					Priority:           100,
+					CostPerSMS:         costPerSMS,
+					SupportedCountries: []string{"CN"},
+					Timeout:            30 * time.Second,
+				})
+			} else {
+				// 使用本地Provider实现，从数据库读取配置
+				providerInstance = provider.NewLocalProvider(providerCode, getStringValue(p.Name, "Local"), 100, businessTypeConfigs)
+			}
+
+			providerManager.RegisterProvider(providerCode, providerInstance)
 		}
 	}
 
@@ -174,4 +235,17 @@ func GetProviderManager() *ProviderManager {
 		panic("ProviderManager not initialized. Call InitProviderManager first.")
 	}
 	return providerManager
+}
+
+// contains 检查字符串是否包含子字符串（不区分大小写）
+func contains(s, substr string) bool {
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
+}
+
+// getStringValue 安全获取字符串指针的值
+func getStringValue(ptr *string, defaultValue string) string {
+	if ptr == nil {
+		return defaultValue
+	}
+	return *ptr
 }

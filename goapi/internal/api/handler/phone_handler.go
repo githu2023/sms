@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"sms-platform/goapi/internal/common"
 	"sms-platform/goapi/internal/dto"
+	"sms-platform/goapi/internal/global"
 	"sms-platform/goapi/internal/service"
 	"sms-platform/goapi/internal/utils"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // PhoneHandler 手机号处理器
@@ -74,6 +76,14 @@ func (h *PhoneHandler) GetPhone(c *gin.Context) {
 
 	result, errCode := h.phoneService.GetPhone(ctx, userID, req.BusinessType, req.CardType, req.Count)
 	if errCode != common.CodeSuccess {
+		// 记录详细错误信息到日志
+		global.LogError("获取手机号API调用失败",
+			zap.Int64("customer_id", userID),
+			zap.String("business_type", req.BusinessType),
+			zap.String("card_type", req.CardType),
+			zap.Int("count", req.Count),
+			zap.Int("error_code", int(errCode)),
+			zap.String("error_msg", errCode.Message()))
 		common.RespondError(c, errCode)
 		return
 	}

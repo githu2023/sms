@@ -46,3 +46,4 @@ server/config.docker.yaml
 server/Dockerfile
 MERCHANT_PASSWORD_SETUP.md
 server/sms-admin
+.DS_Store

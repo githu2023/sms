@@ -17,6 +17,7 @@ type PhoneAssignment struct {
 	MerchantNo             string         `gorm:"type:varchar(50);not null;comment:商户号;index:idx_merchant_no" json:"merchant_no"`
 	MerchantName           string         `gorm:"type:varchar(255);not null;comment:商户名称" json:"merchant_name"`
 	PhoneNumber            *string        `gorm:"type:varchar(50);comment:获取到的手机号;index:idx_phone_number" json:"phone_number"`
+	ExtId                  *string        `gorm:"type:varchar(100);comment:运营商返回的外部ID(extId)，用于后续获取验证码和释放手机号" json:"ext_id"`
 	VerificationCode       *string        `gorm:"type:varchar(50);comment:获取到的验证码" json:"verification_code"`
 	FetchCount             *int           `gorm:"default:0;comment:获取验证码次数" json:"fetch_count"`
 	Status                 *string        `gorm:"type:varchar(20);default:pending;comment:状态 (pending:待取码, completed:已完成, expired:已过期, failed:失败);index:idx_status" json:"status"`

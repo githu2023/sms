@@ -37,3 +37,47 @@ func SyncLogger() {
 	}
 }
 
+// LogInfo 记录信息日志
+func LogInfo(msg string, fields ...zap.Field) {
+	if logger != nil {
+		logger.Info(msg, fields...)
+	}
+}
+
+// LogWarn 记录警告日志
+func LogWarn(msg string, fields ...zap.Field) {
+	if logger != nil {
+		logger.Warn(msg, fields...)
+	}
+}
+
+// LogError 记录错误日志
+func LogError(msg string, fields ...zap.Field) {
+	if logger != nil {
+		logger.Error(msg, fields...)
+	}
+}
+
+// LogDebug 记录调试日志
+func LogDebug(msg string, fields ...zap.Field) {
+	if logger != nil {
+		logger.Debug(msg, fields...)
+	}
+}
+
+// LogFatal 记录致命错误日志并退出
+func LogFatal(msg string, fields ...zap.Field) {
+	if logger != nil {
+		logger.Fatal(msg, fields...)
+	}
+}
+
+// S 返回全局的SugaredLogger（便捷方法，兼容zap.S()的使用方式）
+func S() *zap.SugaredLogger {
+	if logger != nil {
+		return logger.Sugar()
+	}
+	// 如果logger未初始化，返回一个no-op logger
+	return zap.NewNop().Sugar()
+}
+

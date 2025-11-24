@@ -297,7 +297,8 @@ func (lp *LocalProvider) GetPhone(ctx context.Context, businessType, cardType st
 // GetCode 获取验证码
 // 注意：对于本地Provider，如果手机号不在内存中，我们仍然可以生成验证码
 // 因为这是一个模拟实现，实际生产环境应该从数据库或其他持久化存储中恢复状态
-func (lp *LocalProvider) GetCode(ctx context.Context, phoneNumber string, timeout time.Duration) (*CodeResponse, error) {
+// extId 参数：本地 Provider 不使用 extId，保留参数以兼容接口
+func (lp *LocalProvider) GetCode(ctx context.Context, phoneNumber string, timeout time.Duration, extId ...string) (*CodeResponse, error) {
 	// 先检查内存中是否有该手机号
 	lp.mu.RLock()
 	assignedPhone, exists := lp.phoneNumbersInUse[phoneNumber]

@@ -10,6 +10,7 @@ import (
 	"sms-platform/goapi/internal/repository"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -121,18 +122,30 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 	providerManager := global.GetProviderManager()
 	providerInstance, err := providerManager.GetProviderByCode(*selectedMapping.ProviderCode)
 	if err != nil {
-		s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
-			fmt.Sprintf("Provider not found: %s", *selectedMapping.ProviderCode))
-		return nil, common.CodeThirdPartyError
+		errorMsg := fmt.Sprintf("服务商未找到: code=%s, 错误=%v", *selectedMapping.ProviderCode, err)
+		global.LogError("获取手机号失败：服务商未找到",
+			zap.Int64("customer_id", customerID),
+			zap.String("business_type", businessType),
+			zap.String("provider_code", *selectedMapping.ProviderCode),
+			zap.Error(err))
+		s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone", errorMsg)
+		return nil, common.CodeProviderNotFound
 	}
 
 	// 5. 查询运营商业务类型，获取价格
 	providerBusinessType, err := s.providerBusinessTypeRepo.FindByProviderCodeAndBusinessCode(
 		ctx, *selectedMapping.ProviderCode, *selectedMapping.BusinessCode)
 	if err != nil {
-		s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
-			fmt.Sprintf("Provider business type not found: %s/%s", *selectedMapping.ProviderCode, *selectedMapping.BusinessCode))
-		return nil, common.CodeInternalError
+		errorMsg := fmt.Sprintf("服务商业务类型未配置: provider=%s, business_code=%s, 错误=%v",
+			*selectedMapping.ProviderCode, *selectedMapping.BusinessCode, err)
+		global.LogError("获取手机号失败：服务商业务类型未配置",
+			zap.Int64("customer_id", customerID),
+			zap.String("business_type", businessType),
+			zap.String("provider_code", *selectedMapping.ProviderCode),
+			zap.String("business_code", *selectedMapping.BusinessCode),
+			zap.Error(err))
+		s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone", errorMsg)
+		return nil, common.CodeProviderBusinessNotFound
 	}
 
 	costPerPhone := 0.0
@@ -172,8 +185,16 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 		phoneResponse, err := providerInstance.GetPhone(ctx, *selectedMapping.BusinessCode, cardType)
 		if err != nil {
 			failedCount++
-			s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
-				fmt.Sprintf("Failed to get phone from provider %s: %v", *selectedMapping.ProviderCode, err))
+			errorMsg := fmt.Sprintf("服务商获取手机号失败: provider=%s, business_code=%s, card_type=%s, 错误=%v",
+				*selectedMapping.ProviderCode, *selectedMapping.BusinessCode, cardType, err)
+			global.LogWarn("服务商获取手机号失败",
+				zap.Int64("customer_id", customerID),
+				zap.String("provider_code", *selectedMapping.ProviderCode),
+				zap.String("business_code", *selectedMapping.BusinessCode),
+				zap.String("card_type", cardType),
+				zap.Int("attempt", i+1),
+				zap.Error(err))
+			s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone", errorMsg)
 			// 继续尝试下一个，不立即返回错误
 			continue
 		}
@@ -204,6 +225,11 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 			PlatformBusinessTypeID: &customerConfig.PlatformBusinessTypeID,
 			CreatedAt:              time.Now(),
 			UpdatedAt:              time.Now(),
+		}
+
+		// 保存 extId（如果 Provider 返回了 extId）
+		if phoneResponse.ExtId != "" {
+			assignment.ExtId = &phoneResponse.ExtId
 		}
 
 		// 如果有ProviderID，设置它
@@ -286,6 +312,17 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 
 	// 如果全部失败，返回错误
 	if successCount == 0 {
+		errorMsg := fmt.Sprintf("所有获取手机号尝试都失败: 尝试次数=%d, 失败次数=%d, provider=%s, business_code=%s",
+			count, failedCount, *selectedMapping.ProviderCode, *selectedMapping.BusinessCode)
+		global.LogError("获取手机号失败：所有尝试都失败",
+			zap.Int64("customer_id", customerID),
+			zap.String("business_type", businessType),
+			zap.String("card_type", cardType),
+			zap.Int("count", count),
+			zap.Int("failed_count", failedCount),
+			zap.String("provider_code", *selectedMapping.ProviderCode),
+			zap.String("business_code", *selectedMapping.BusinessCode))
+		s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone", errorMsg)
 		return nil, common.CodeThirdPartyError
 	}
 
