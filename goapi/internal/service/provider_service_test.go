@@ -50,15 +50,18 @@ func TestProviderService_CreateProvider(t *testing.T) {
 	providerService := NewProviderService(mockRepo)
 	ctx := context.Background()
 
+	name := "TestProvider"
+	apiConfig := `{"url":"http://test.com"}`
+	enabled := true
 	provider := &domain.Provider{
-		Name:      "TestProvider",
-		APIConfig: `{"url":"http://test.com"}`,
-		IsEnabled: true,
+		Name:      &name,
+		APIConfig: &apiConfig,
+		IsEnabled: &enabled,
 	}
 
 	mockRepo.On("Create", ctx, provider).Return(nil)
 
-	createdProvider, err := providerService.CreateProvider(ctx, provider.Name, provider.APIConfig, provider.IsEnabled)
+	createdProvider, err := providerService.CreateProvider(ctx, *provider.Name, *provider.APIConfig, *provider.IsEnabled)
 	assert.NoError(t, err)
 	assert.Equal(t, provider.Name, createdProvider.Name)
 	mockRepo.AssertExpectations(t)
@@ -69,7 +72,8 @@ func TestProviderService_GetProviderByID(t *testing.T) {
 	providerService := NewProviderService(mockRepo)
 	ctx := context.Background()
 
-	provider := &domain.Provider{ID: 1, Name: "TestProvider"}
+	name := "TestProvider"
+	provider := &domain.Provider{ID: 1, Name: &name}
 
 	mockRepo.On("FindByID", ctx, 1).Return(provider, nil)
 
@@ -84,9 +88,11 @@ func TestProviderService_ListProviders(t *testing.T) {
 	providerService := NewProviderService(mockRepo)
 	ctx := context.Background()
 
+	p1Name := "P1"
+	p2Name := "P2"
 	providers := []*domain.Provider{
-		{ID: 1, Name: "P1"},
-		{ID: 2, Name: "P2"},
+		{ID: 1, Name: &p1Name},
+		{ID: 2, Name: &p2Name},
 	}
 
 	mockRepo.On("FindAll", ctx).Return(providers, nil)
@@ -102,7 +108,8 @@ func TestProviderService_UpdateProvider(t *testing.T) {
 	providerService := NewProviderService(mockRepo)
 	ctx := context.Background()
 
-	provider := &domain.Provider{ID: 1, Name: "UpdatedProvider"}
+	updatedName := "UpdatedProvider"
+	provider := &domain.Provider{ID: 1, Name: &updatedName}
 
 	mockRepo.On("Update", ctx, provider).Return(nil)
 

@@ -81,11 +81,21 @@ func (h *WhitelistHandler) ListWhitelists(c *gin.Context) {
 	}
 	resp := make([]dto.WhitelistResponse, 0, len(list))
 	for _, wl := range list {
+		ipAddress := ""
+		if wl.IPAddress != nil {
+			ipAddress = *wl.IPAddress
+		}
+
+		remark := ""
+		if wl.Remark != nil {
+			remark = *wl.Remark
+		}
+
 		resp = append(resp, dto.WhitelistResponse{
 			ID:         wl.ID,
 			CustomerID: wl.CustomerID,
-			IPAddress:  wl.IPAddress,
-			Notes:      wl.Notes,
+			IPAddress:  ipAddress,
+			Notes:      remark, // Use Remark field instead of Notes
 			CreatedAt:  wl.CreatedAt.Unix(),
 		})
 	}

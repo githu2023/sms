@@ -100,17 +100,17 @@ func TestAssignmentHandler_GetAssignments_Success(t *testing.T) {
 
 	// Mock data - use domain.PhoneAssignment as service.GetAssignments returns this
 	now := time.Now()
+	phoneNumber := "+15551234567"
+	verificationCode := "123456"
+	status := "completed"
 	assignments := []*domain.PhoneAssignment{
 		{
 			ID:               1,
-			ProviderID:       "provider-1",
-			BusinessTypeID:   1, // Assuming this exists or is mocked
-			CardType:         "virtual",
-			PhoneNumber:      "+15551234567",
-			VerificationCode: "123456",
-			Cost:             0.10,
-			Status:           2,
-			ExpiresAt:        &now,
+			ProviderID:       &[]int64{1}[0],
+			PhoneNumber:      &phoneNumber,
+			VerificationCode: &verificationCode,
+			MerchantFee:      &[]float64{0.10}[0],
+			Status:           &status,
 			CreatedAt:        now,
 			UpdatedAt:        now,
 		},
@@ -153,17 +153,17 @@ func TestAssignmentHandler_GetAssignments_WithFilter_Success(t *testing.T) {
 
 	// Mock data
 	now := time.Now()
+	phoneNumber2 := "+15557654321"
+	verificationCode2 := "987654"
+	status2 := "pending"
 	assignments := []*domain.PhoneAssignment{
 		{
 			ID:               2,
-			ProviderID:       "provider-2",
-			BusinessTypeID:   2,
-			CardType:         "physical",
-			PhoneNumber:      "+15557654321",
-			VerificationCode: "987654",
-			Cost:             0.20,
-			Status:           1,
-			ExpiresAt:        &now,
+			ProviderID:       &[]int64{2}[0],
+			PhoneNumber:      &phoneNumber2,
+			VerificationCode: &verificationCode2,
+			MerchantFee:      &[]float64{0.20}[0],
+			Status:           &status2,
 			CreatedAt:        now,
 			UpdatedAt:        now,
 		},

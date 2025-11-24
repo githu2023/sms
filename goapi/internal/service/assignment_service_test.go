@@ -85,19 +85,18 @@ func TestAssignmentService_GetAssignments_Success(t *testing.T) {
 
 	// Mock data
 	now := time.Now()
-	expireTime := now.Add(30 * time.Minute)
+	phoneNumber := "+15551234567"
+	status := "completed"
+	// merchantFee := float64(0.10) // Commented out as unused
 	assignments := []*domain.PhoneAssignment{
 		{
-			ID:             1,
-			CustomerID:     1,
-			ProviderID:     "1",
-			BusinessTypeID: 1,
-			CardType:       "virtual",
-			PhoneNumber:    "+15551234567",
-			Cost:           0.10,
-			Status:         2,
-			CreatedAt:      now,
-			ExpiresAt:      &expireTime,
+			ID:          1,
+			CustomerID:  &[]int64{1}[0],
+			ProviderID:  &[]int64{1}[0],
+			PhoneNumber: &phoneNumber,
+			MerchantFee: &[]float64{0.10}[0],
+			Status:      &status,
+			CreatedAt:   now,
 		},
 	}
 
@@ -116,7 +115,7 @@ func TestAssignmentService_GetAssignments_Success(t *testing.T) {
 	// Check assignment
 	assignment := result[0]
 	assert.Equal(t, int64(1), assignment.ID)
-	assert.Equal(t, "+15551234567", assignment.PhoneNumber)
+	assert.Equal(t, "+15551234567", *assignment.PhoneNumber)
 
 	mockAssignmentRepo.AssertExpectations(t)
 }
@@ -148,31 +147,27 @@ func TestAssignmentService_GetCostStatistics_Success(t *testing.T) {
 
 	// Mock data
 	now := time.Now()
-	expireTime := now.Add(30 * time.Minute)
+	phoneNumber1 := "+15551234567"
+	phoneNumber2 := "+15551234568"
+	status := "completed"
 	assignments := []*domain.PhoneAssignment{
 		{
-			ID:             1,
-			CustomerID:     1,
-			ProviderID:     "1",
-			BusinessTypeID: 1,
-			CardType:       "virtual",
-			PhoneNumber:    "+15551234567",
-			Cost:           0.10,
-			Status:         2,
-			CreatedAt:      now,
-			ExpiresAt:      &expireTime,
+			ID:          1,
+			CustomerID:  &[]int64{1}[0],
+			ProviderID:  &[]int64{1}[0],
+			PhoneNumber: &phoneNumber1,
+			MerchantFee: &[]float64{0.10}[0],
+			Status:      &status,
+			CreatedAt:   now,
 		},
 		{
-			ID:             2,
-			CustomerID:     1,
-			ProviderID:     "1",
-			BusinessTypeID: 1,
-			CardType:       "virtual",
-			PhoneNumber:    "+15551234568",
-			Cost:           0.15,
-			Status:         2,
-			CreatedAt:      now,
-			ExpiresAt:      &expireTime,
+			ID:          2,
+			CustomerID:  &[]int64{1}[0],
+			ProviderID:  &[]int64{1}[0],
+			PhoneNumber: &phoneNumber2,
+			MerchantFee: &[]float64{0.15}[0],
+			Status:      &status,
+			CreatedAt:   now,
 		},
 	}
 

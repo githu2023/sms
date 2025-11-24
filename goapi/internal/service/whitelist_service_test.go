@@ -72,7 +72,7 @@ func TestAddWhitelist(t *testing.T) {
 	notes := "Office IP"
 
 	mockRepo.On("Create", ctx, mock.MatchedBy(func(w *domain.IPWhitelist) bool {
-		return w.CustomerID == customerID && w.IPAddress == ipAddress && w.Notes == notes
+		return w.CustomerID == customerID && *w.IPAddress == ipAddress && *w.Remark == notes
 	})).Return(nil)
 
 	err := service.AddWhitelist(ctx, customerID, ipAddress, notes)
@@ -92,7 +92,7 @@ func TestAddWhitelist_WithCIDR(t *testing.T) {
 	notes := "Office Network"
 
 	mockRepo.On("Create", ctx, mock.MatchedBy(func(w *domain.IPWhitelist) bool {
-		return w.CustomerID == customerID && w.IPAddress == ipAddress
+		return w.CustomerID == customerID && *w.IPAddress == ipAddress
 	})).Return(nil)
 
 	err := service.AddWhitelist(ctx, customerID, ipAddress, notes)
@@ -183,15 +183,15 @@ func TestListWhitelists(t *testing.T) {
 		{
 			ID:         1,
 			CustomerID: customerID,
-			IPAddress:  "192.168.1.1",
-			Notes:      "Office",
+			IPAddress:  stringPtr("192.168.1.1"),
+			Remark:     stringPtr("Office"),
 			CreatedAt:  time.Now(),
 		},
 		{
 			ID:         2,
 			CustomerID: customerID,
-			IPAddress:  "192.168.1.0/24",
-			Notes:      "Network",
+			IPAddress:  stringPtr("192.168.1.0/24"),
+			Remark:     stringPtr("Network"),
 			CreatedAt:  time.Now(),
 		},
 	}
@@ -203,8 +203,8 @@ func TestListWhitelists(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(2), total)
 	assert.Len(t, list, 2)
-	assert.Equal(t, "192.168.1.1", list[0].IPAddress)
-	assert.Equal(t, "192.168.1.0/24", list[1].IPAddress)
+	assert.Equal(t, "192.168.1.1", *list[0].IPAddress)
+	assert.Equal(t, "192.168.1.0/24", *list[1].IPAddress)
 	mockRepo.AssertExpectations(t)
 }
 
@@ -262,8 +262,8 @@ func TestGetWhitelist(t *testing.T) {
 	whitelist := &domain.IPWhitelist{
 		ID:         1,
 		CustomerID: customerID,
-		IPAddress:  ipAddress,
-		Notes:      "Office",
+		IPAddress:  stringPtr(ipAddress),
+		Remark:     stringPtr("Office"),
 		CreatedAt:  time.Now(),
 	}
 
@@ -273,8 +273,8 @@ func TestGetWhitelist(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, ipAddress, result.IPAddress)
-	assert.Equal(t, "Office", result.Notes)
+	assert.Equal(t, ipAddress, *result.IPAddress)
+	assert.Equal(t, "Office", *result.Remark)
 	mockRepo.AssertExpectations(t)
 }
 

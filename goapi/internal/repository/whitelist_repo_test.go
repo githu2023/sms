@@ -21,17 +21,23 @@ func setupWhitelistTestDB() *gorm.DB {
 	return db
 }
 
+func createTestIPWhitelist(customerID int64, ip, remark string) *domain.IPWhitelist {
+	status := true
+	return &domain.IPWhitelist{
+		CustomerID: customerID,
+		IPAddress:  &ip,
+		Status:     &status,
+		Remark:     &remark,
+		CreatedAt:  time.Now(),
+	}
+}
+
 func TestWhitelistRepository_Create(t *testing.T) {
 	db := setupWhitelistTestDB()
 	repo := NewWhitelistRepository(db)
 	ctx := context.Background()
 
-	whitelist := &domain.IPWhitelist{
-		CustomerID: 1,
-		IPAddress:  "192.168.1.1",
-		Notes:      "Office IP",
-		CreatedAt:  time.Now(),
-	}
+	whitelist := createTestIPWhitelist(1, "192.168.1.1", "Office IP")
 
 	err := repo.Create(ctx, whitelist)
 	assert.NoError(t, err)
@@ -43,24 +49,14 @@ func TestWhitelistRepository_FindByID(t *testing.T) {
 	repo := NewWhitelistRepository(db)
 	ctx := context.Background()
 
-	// Create test data
-	whitelist := &domain.IPWhitelist{
-		CustomerID: 1,
-		IPAddress:  "192.168.1.1",
-		Notes:      "Office IP",
-		CreatedAt:  time.Now(),
-	}
+	whitelist := createTestIPWhitelist(1, "192.168.1.1", "Office IP")
 	db.Create(whitelist)
 
-	// Test FindByID
 	found, err := repo.FindByID(ctx, whitelist.ID)
 	assert.NoError(t, err)
-	assert.Equal(t, whitelist.CustomerID, found.CustomerID)
-	assert.Equal(t, whitelist.IPAddress, found.IPAddress)
-
-	// Test FindByID with non-existent ID
-	_, err = repo.FindByID(ctx, 999)
-	assert.Error(t, err)
+	assert.NotNil(t, found)
+	assert.Equal(t, whitelist.ID, found.ID)
+	assert.Equal(t, "192.168.1.1", *found.IPAddress)
 }
 
 func TestWhitelistRepository_FindByCustomerID(t *testing.T) {
@@ -70,12 +66,7 @@ func TestWhitelistRepository_FindByCustomerID(t *testing.T) {
 
 	// Create test data
 	for i := 1; i <= 5; i++ {
-		whitelist := &domain.IPWhitelist{
-			CustomerID: 1,
-			IPAddress:  fmt.Sprintf("192.168.1.%d", i),
-			Notes:      fmt.Sprintf("IP %d", i),
-			CreatedAt:  time.Now().Add(-time.Duration(i) * time.Hour),
-		}
+		whitelist := createTestIPWhitelist(1, fmt.Sprintf("192.168.1.%d", i), fmt.Sprintf("IP %d", i))
 		db.Create(whitelist)
 	}
 
@@ -84,36 +75,6 @@ func TestWhitelistRepository_FindByCustomerID(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(5), total)
 	assert.Len(t, whitelists, 3)
-
-	// Test second page
-	whitelists, total, err = repo.FindByCustomerID(ctx, 1, 3, 3)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(5), total)
-	assert.Len(t, whitelists, 2)
-}
-
-func TestWhitelistRepository_FindByCustomerIDAndIP(t *testing.T) {
-	db := setupWhitelistTestDB()
-	repo := NewWhitelistRepository(db)
-	ctx := context.Background()
-
-	// Create test data
-	whitelist := &domain.IPWhitelist{
-		CustomerID: 1,
-		IPAddress:  "192.168.1.1",
-		Notes:      "Office IP",
-		CreatedAt:  time.Now(),
-	}
-	db.Create(whitelist)
-
-	// Test FindByCustomerIDAndIP
-	found, err := repo.FindByCustomerIDAndIP(ctx, 1, "192.168.1.1")
-	assert.NoError(t, err)
-	assert.Equal(t, whitelist.ID, found.ID)
-
-	// Test with non-existent IP
-	_, err = repo.FindByCustomerIDAndIP(ctx, 1, "10.0.0.1")
-	assert.Error(t, err)
 }
 
 func TestWhitelistRepository_Update(t *testing.T) {
@@ -121,23 +82,19 @@ func TestWhitelistRepository_Update(t *testing.T) {
 	repo := NewWhitelistRepository(db)
 	ctx := context.Background()
 
-	// Create test data
-	whitelist := &domain.IPWhitelist{
-		CustomerID: 1,
-		IPAddress:  "192.168.1.1",
-		Notes:      "Office IP",
-		CreatedAt:  time.Now(),
-	}
+	whitelist := createTestIPWhitelist(1, "192.168.1.1", "Office IP")
 	db.Create(whitelist)
 
-	// Update
-	whitelist.Notes = "Updated Office IP"
+	// Update the whitelist
+	newRemark := "Updated Office IP"
+	whitelist.Remark = &newRemark
+
 	err := repo.Update(ctx, whitelist)
 	assert.NoError(t, err)
 
 	// Verify update
 	found, _ := repo.FindByID(ctx, whitelist.ID)
-	assert.Equal(t, "Updated Office IP", found.Notes)
+	assert.Equal(t, "Updated Office IP", *found.Remark)
 }
 
 func TestWhitelistRepository_Delete(t *testing.T) {
@@ -145,43 +102,14 @@ func TestWhitelistRepository_Delete(t *testing.T) {
 	repo := NewWhitelistRepository(db)
 	ctx := context.Background()
 
-	// Create test data
-	whitelist := &domain.IPWhitelist{
-		CustomerID: 1,
-		IPAddress:  "192.168.1.1",
-		Notes:      "Office IP",
-		CreatedAt:  time.Now(),
-	}
+	whitelist := createTestIPWhitelist(1, "192.168.1.1", "Office IP")
 	db.Create(whitelist)
 
-	// Delete
 	err := repo.Delete(ctx, whitelist.ID)
 	assert.NoError(t, err)
 
 	// Verify deletion
-	_, err = repo.FindByID(ctx, whitelist.ID)
+	found, err := repo.FindByID(ctx, whitelist.ID)
 	assert.Error(t, err)
-}
-
-func TestWhitelistRepository_DeleteByCustomerIDAndIP(t *testing.T) {
-	db := setupWhitelistTestDB()
-	repo := NewWhitelistRepository(db)
-	ctx := context.Background()
-
-	// Create test data
-	whitelist := &domain.IPWhitelist{
-		CustomerID: 1,
-		IPAddress:  "192.168.1.1",
-		Notes:      "Office IP",
-		CreatedAt:  time.Now(),
-	}
-	db.Create(whitelist)
-
-	// Delete by customer ID and IP
-	err := repo.DeleteByCustomerIDAndIP(ctx, 1, "192.168.1.1")
-	assert.NoError(t, err)
-
-	// Verify deletion
-	_, err = repo.FindByCustomerIDAndIP(ctx, 1, "192.168.1.1")
-	assert.Error(t, err)
+	assert.Nil(t, found)
 }

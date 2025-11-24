@@ -62,13 +62,18 @@ func (s *transactionService) TopUp(ctx context.Context, customerID int64, amount
 	}
 
 	// Create transaction record
+	amountFloat := float32(amount)
+	balanceBeforeFloat := float32(currentBalance)
+	balanceAfterFloat := float32(currentBalance + amount)
+	transactionType := "1"
+
 	transaction := &domain.Transaction{
 		CustomerID:    customerID,
-		Amount:        amount,
-		BalanceBefore: currentBalance,
-		BalanceAfter:  currentBalance + amount,
-		Type:          "1", // 1 = topup
-		Notes:         notes,
+		Amount:        &amountFloat,
+		BalanceBefore: &balanceBeforeFloat,
+		BalanceAfter:  &balanceAfterFloat,
+		Type:          &transactionType, // 1 = topup
+		Notes:         &notes,
 		CreatedAt:     time.Now(),
 	}
 
@@ -100,14 +105,19 @@ func (s *transactionService) Deduct(ctx context.Context, customerID int64, amoun
 	}
 
 	// Create transaction record
+	amountFloat := -float32(amount) // Negative for deduction
+	balanceBeforeFloat := float32(currentBalance)
+	balanceAfterFloat := float32(currentBalance - amount)
+	transactionType := "2"
+
 	transaction := &domain.Transaction{
 		CustomerID:    customerID,
-		Amount:        amount,
-		BalanceBefore: currentBalance,
-		BalanceAfter:  currentBalance - amount,
-		Type:          "2", // 2 = deduct
-		ReferenceID:   referenceID,
-		Notes:         notes,
+		Amount:        &amountFloat,
+		BalanceBefore: &balanceBeforeFloat,
+		BalanceAfter:  &balanceAfterFloat,
+		Type:          &transactionType, // 2 = deduct
+		ReferenceID:   &referenceID,
+		Notes:         &notes,
 		CreatedAt:     time.Now(),
 	}
 

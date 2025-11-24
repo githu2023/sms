@@ -3,6 +3,7 @@ package handler
 import (
 	"sms-platform/goapi/internal/common"
 	"sms-platform/goapi/internal/service"
+	"sms-platform/goapi/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -38,20 +39,13 @@ type BalanceResponse struct {
 // @Router /client/v1/balance [get]
 func (h *BalanceHandler) GetBalance(c *gin.Context) {
 	// Get customer_id from context (set by authentication middleware)
-	customerIDInterface, exists := c.Get("customer_id")
-	if !exists {
-		common.RespondError(c, common.CodeUnauthorized)
-		return
-	}
-
-	customerID, ok := customerIDInterface.(uint)
+	customerID, ok := utils.RequireCustomerID(c)
 	if !ok {
-		common.RespondError(c, common.CodeUnauthorized)
 		return
 	}
 
 	// Get balance from transaction service
-	balance, err := h.transactionService.GetBalance(c.Request.Context(), int64(customerID))
+	balance, err := h.transactionService.GetBalance(c.Request.Context(), customerID)
 	if err != nil {
 		common.RespondErrorWithMsg(c, common.CodeInternalError, "Failed to get balance: "+err.Error())
 		return

@@ -1,17 +1,27 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 // IPWhitelist IP白名单表
 type IPWhitelist struct {
-	ID         int64     `gorm:"primaryKey;autoIncrement" json:"id"`
-	CustomerID int64     `gorm:"uniqueIndex:uniq_customer_ip;not null" json:"customer_id"`        // 客户ID
-	IPAddress  string    `gorm:"uniqueIndex:uniq_customer_ip;size:45;not null" json:"ip_address"` // 白名单IP或IP段
-	Notes      string    `json:"notes"`                                                           // 备注, 例如 "办公室IP"
-	CreatedAt  time.Time `json:"created_at"`                                                      // 创建时间
+	ID         int64          `gorm:"primaryKey;autoIncrement;comment:ID" json:"id"`
+	CreatedAt  time.Time      `gorm:"comment:创建时间" json:"created_at"`
+	UpdatedAt  time.Time      `gorm:"comment:更新时间" json:"updated_at"`
+	DeletedAt  gorm.DeletedAt `gorm:"index;comment:删除时间" json:"deleted_at"`
+	CustomerID int64          `gorm:"not null;comment:客户ID;index:idx_customer_id" json:"customer_id"`
+	IPAddress  *string        `gorm:"type:varchar(45);comment:IP地址" json:"ip_address"`
+	Status     *bool          `gorm:"comment:启用状态" json:"status"`
+	Remark     *string        `gorm:"type:varchar(500);comment:备注" json:"remark"`
+
+	// 关联关系
+	Customer *Customer `gorm:"foreignKey:CustomerID" json:"customer,omitempty"`
 }
 
 // TableName 指定表名
 func (IPWhitelist) TableName() string {
-	return "sms_ip_whitelists"
+	return "sms_ip_whitelist"
 }

@@ -1,10 +1,11 @@
 package handler
 
 import (
-	"errors" // Added errors import
+	"errors"
 	"sms-platform/goapi/internal/common"
 	"sms-platform/goapi/internal/dto"
 	"sms-platform/goapi/internal/service"
+	"sms-platform/goapi/internal/utils"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -54,14 +55,8 @@ func (h *AssignmentHandler) GetAssignments(c *gin.Context) {
 		req.Limit = 20
 	}
 
-	customerID, exists := c.Get("customer_id")
-	if !exists {
-		common.RespondError(c, common.CodeUnauthorized)
-		return
-	}
-	customerIDInt64, ok := customerID.(int64)
+	customerIDInt64, ok := utils.RequireCustomerID(c)
 	if !ok {
-		common.RespondErrorWithMsg(c, common.CodeUnauthorized, "用户ID格式错误")
 		return
 	}
 
@@ -109,17 +104,55 @@ func (h *AssignmentHandler) GetAssignments(c *gin.Context) {
 	// 转换领域模型为DTO
 	items := make([]dto.AssignmentHistoryItem, len(assignments))
 	for i, assignment := range assignments {
+		// Convert pointer fields to values with defaults
+		phoneNumber := ""
+		if assignment.PhoneNumber != nil {
+			phoneNumber = *assignment.PhoneNumber
+		}
+
+		verificationCode := ""
+		if assignment.VerificationCode != nil {
+			verificationCode = *assignment.VerificationCode
+		}
+
+		// Convert string status to int
+		status := 1 // default pending
+		if assignment.Status != nil {
+			switch *assignment.Status {
+			case "pending":
+				status = 1
+			case "completed":
+				status = 2
+			case "expired":
+				status = 3
+			case "failed":
+				status = 4
+			}
+		}
+
+		// Use MerchantFee as cost
+		cost := 0.0
+		if assignment.MerchantFee != nil {
+			cost = float64(*assignment.MerchantFee)
+		}
+
+		// Use BusinessCode as business type
+		businessType := ""
+		if assignment.BusinessCode != "" {
+			businessType = assignment.BusinessCode
+		}
+
 		items[i] = dto.AssignmentHistoryItem{
-			ID:          assignment.ID,
-			PhoneNumber: assignment.PhoneNumber,
-			// BusinessType:     assignment.BusinessTypeID, // Need to lookup business type code from ID
-			CardType:         assignment.CardType,
-			VerificationCode: assignment.VerificationCode,
-			Cost:             assignment.Cost,
-			Status:           assignment.Status,
-			ExpiresAt:        assignment.ExpiresAt,
+			ID:               assignment.ID,
+			PhoneNumber:      phoneNumber,
+			BusinessType:     businessType,
+			CardType:         "virtual", // Default since CardType field doesn't exist in new model
+			VerificationCode: verificationCode,
+			Cost:             cost,
+			Status:           status,
+			ExpiresAt:        nil, // ExpiresAt field doesn't exist in new model
 			CreatedAt:        assignment.CreatedAt,
-			// ProviderName:     assignment.ProviderID, // Need to lookup provider name from ID
+			ProviderName:     "", // Need to lookup provider name from ID
 		}
 	}
 
@@ -160,14 +193,8 @@ func (h *AssignmentHandler) GetCostStatistics(c *gin.Context) {
 		return
 	}
 
-	customerID, exists := c.Get("customer_id")
-	if !exists {
-		common.RespondError(c, common.CodeUnauthorized)
-		return
-	}
-	customerIDInt64, ok := customerID.(int64)
+	customerIDInt64, ok := utils.RequireCustomerID(c)
 	if !ok {
-		common.RespondErrorWithMsg(c, common.CodeUnauthorized, "用户ID格式错误")
 		return
 	}
 

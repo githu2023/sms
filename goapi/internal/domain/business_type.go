@@ -24,3 +24,4 @@ type BusinessTypeRepository interface {
 func (BusinessType) TableName() string {
 	return "sms_business_types"
 }
+

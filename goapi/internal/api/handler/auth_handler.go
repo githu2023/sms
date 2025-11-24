@@ -38,7 +38,7 @@ func (h *AuthHandler) GetAPIToken(c *gin.Context) {
 		return
 	}
 
-	token, err := h.userService.GenerateAPIToken(c.Request.Context(), req.Secret)
+	token, err := h.userService.GenerateAPIToken(c.Request.Context(), req.MerchantNo, req.Secret)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidAPISecret) {
 			common.RespondError(c, common.CodeInvalidSecret)

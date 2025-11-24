@@ -37,8 +37,8 @@ func (s *whitelistService) AddWhitelist(ctx context.Context, customerID int64, i
 	}
 	entry := &domain.IPWhitelist{
 		CustomerID: customerID,
-		IPAddress:  ipAddress,
-		Notes:      notes,
+		IPAddress:  &ipAddress,
+		Remark:     &notes,
 	}
 	return s.repo.Create(ctx, entry)
 }

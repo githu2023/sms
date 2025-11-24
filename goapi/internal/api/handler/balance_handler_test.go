@@ -78,7 +78,7 @@ func TestBalanceHandler_GetBalance_Success(t *testing.T) {
 
 	// Setup route
 	router.GET("/api/v1/balance", func(c *gin.Context) {
-		c.Set("customer_id", uint(1))
+		c.Set("customer_id", int64(1))
 		handler.GetBalance(c)
 	})
 
@@ -108,7 +108,10 @@ func TestBalanceHandler_GetBalance_Unauthorized(t *testing.T) {
 	// Setup
 	mockService := &MockTransactionService{}
 	handler := NewBalanceHandler(mockService)
-	router := testutils.SetupTestRouter()
+
+	// Create router without the customer_id middleware
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
 
 	// Setup route without setting customer_id
 	router.GET("/api/v1/balance", handler.GetBalance)
@@ -138,7 +141,7 @@ func TestBalanceHandler_GetBalance_InternalError(t *testing.T) {
 
 	// Setup route
 	router.GET("/api/v1/balance", func(c *gin.Context) {
-		c.Set("customer_id", uint(1))
+		c.Set("customer_id", int64(1))
 		handler.GetBalance(c)
 	})
 

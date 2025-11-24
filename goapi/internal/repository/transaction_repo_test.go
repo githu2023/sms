@@ -17,24 +17,34 @@ func setupTransactionTestDB() *gorm.DB {
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
-	db.AutoMigrate(&domain.Transaction{})
+	db.AutoMigrate(&domain.Transaction{}, &domain.Customer{})
 	return db
+}
+
+func setupTransactionRepo(db *gorm.DB) TransactionRepository {
+	customerRepo := NewCustomerRepository(db)
+	return NewTransactionRepository(db, customerRepo)
+}
+
+// Helper function to create Transaction with pointer fields
+func createTestTransaction(customerID int64, amount float32, balanceBefore, balanceAfter float32, txType, notes string, createdAt time.Time) *domain.Transaction {
+	return &domain.Transaction{
+		CustomerID:    customerID,
+		Amount:        &amount,
+		BalanceBefore: &balanceBefore,
+		BalanceAfter:  &balanceAfter,
+		Type:          &txType,
+		Notes:         &notes,
+		CreatedAt:     createdAt,
+	}
 }
 
 func TestTransactionRepository_Create(t *testing.T) {
 	db := setupTransactionTestDB()
-	repo := NewTransactionRepository(db)
+	repo := setupTransactionRepo(db)
 	ctx := context.Background()
 
-	transaction := &domain.Transaction{
-		CustomerID:    1,
-		Amount:        100.50,
-		BalanceBefore: 0,
-		BalanceAfter:  100.50,
-		Type:          "1", // topup
-		Notes:         "Initial deposit",
-		CreatedAt:     time.Now(),
-	}
+	transaction := createTestTransaction(1, 100.50, 0, 100.50, "1", "Initial deposit", time.Now())
 
 	err := repo.Create(ctx, transaction)
 	assert.NoError(t, err)
@@ -43,19 +53,11 @@ func TestTransactionRepository_Create(t *testing.T) {
 
 func TestTransactionRepository_FindByID(t *testing.T) {
 	db := setupTransactionTestDB()
-	repo := NewTransactionRepository(db)
+	repo := setupTransactionRepo(db)
 	ctx := context.Background()
 
 	// Create test data
-	transaction := &domain.Transaction{
-		CustomerID:    1,
-		Amount:        100.50,
-		BalanceBefore: 0,
-		BalanceAfter:  100.50,
-		Type:          "1",
-		Notes:         "Test transaction",
-		CreatedAt:     time.Now(),
-	}
+	transaction := createTestTransaction(1, 100.50, 0, 100.50, "1", "Test transaction", time.Now())
 	db.Create(transaction)
 
 	// Test FindByID
@@ -71,20 +73,12 @@ func TestTransactionRepository_FindByID(t *testing.T) {
 
 func TestTransactionRepository_FindByCustomerID(t *testing.T) {
 	db := setupTransactionTestDB()
-	repo := NewTransactionRepository(db)
+	repo := setupTransactionRepo(db)
 	ctx := context.Background()
 
 	// Create test data
 	for i := 1; i <= 5; i++ {
-		transaction := &domain.Transaction{
-			CustomerID:    1,
-			Amount:        float64(i * 10),
-			BalanceBefore: 0,
-			BalanceAfter:  float64(i * 10),
-			Type:          "1",
-			Notes:         fmt.Sprintf("Transaction %d", i),
-			CreatedAt:     time.Now().Add(-time.Duration(i) * time.Hour),
-		}
+		transaction := createTestTransaction(1, float32(i*10), 0, float32(i*10), "1", fmt.Sprintf("Transaction %d", i), time.Now().Add(-time.Duration(i)*time.Hour))
 		db.Create(transaction)
 	}
 
@@ -97,27 +91,17 @@ func TestTransactionRepository_FindByCustomerID(t *testing.T) {
 
 func TestTransactionRepository_FindByCustomerIDAndType(t *testing.T) {
 	db := setupTransactionTestDB()
-	repo := NewTransactionRepository(db)
+	repo := setupTransactionRepo(db)
 	ctx := context.Background()
 
 	// Create test data with different types
 	for i := 1; i <= 3; i++ {
-		transaction := &domain.Transaction{
-			CustomerID: 1,
-			Amount:     float64(i * 10),
-			Type:       "1", // topup
-			CreatedAt:  time.Now().Add(-time.Duration(i) * time.Hour),
-		}
+		transaction := createTestTransaction(1, float32(i*10), 0, 0, "1", "", time.Now().Add(-time.Duration(i)*time.Hour))
 		db.Create(transaction)
 	}
 
 	for i := 1; i <= 2; i++ {
-		transaction := &domain.Transaction{
-			CustomerID: 1,
-			Amount:     float64(i * 5),
-			Type:       "2", // deduct
-			CreatedAt:  time.Now().Add(-time.Duration(i) * time.Hour),
-		}
+		transaction := createTestTransaction(1, float32(i*5), 0, 0, "2", "", time.Now().Add(-time.Duration(i)*time.Hour))
 		db.Create(transaction)
 	}
 
@@ -136,26 +120,27 @@ func TestTransactionRepository_FindByCustomerIDAndType(t *testing.T) {
 
 func TestTransactionRepository_GetBalance(t *testing.T) {
 	db := setupTransactionTestDB()
-	repo := NewTransactionRepository(db)
+	repo := setupTransactionRepo(db)
 	ctx := context.Background()
 
-	// Create test transactions
-	transactions := []*domain.Transaction{
-		{CustomerID: 1, Amount: 100, Type: "1", CreatedAt: time.Now()}, // topup +100
-		{CustomerID: 1, Amount: 20, Type: "2", CreatedAt: time.Now()},  // deduct -20
-		{CustomerID: 1, Amount: 50, Type: "1", CreatedAt: time.Now()},  // topup +50
-		{CustomerID: 1, Amount: 10, Type: "2", CreatedAt: time.Now()},  // deduct -10
-		{CustomerID: 2, Amount: 200, Type: "1", CreatedAt: time.Now()}, // different customer
+	// Create test customers with balances
+	customer1 := &domain.Customer{
+		ID:           1,
+		Balance:      120.0,
+		APISecretKey: "test-key-1",
 	}
-
-	for _, tx := range transactions {
-		db.Create(tx)
+	customer2 := &domain.Customer{
+		ID:           2,
+		Balance:      200.0,
+		APISecretKey: "test-key-2",
 	}
+	db.Create(customer1)
+	db.Create(customer2)
 
-	// Test balance calculation for customer 1
+	// Test balance for customer 1
 	balance, err := repo.GetBalance(ctx, 1)
 	assert.NoError(t, err)
-	assert.Equal(t, 120.0, balance) // 100 - 20 + 50 - 10 = 120
+	assert.Equal(t, 120.0, balance)
 
 	// Test balance for customer 2
 	balance, err = repo.GetBalance(ctx, 2)
@@ -164,13 +149,12 @@ func TestTransactionRepository_GetBalance(t *testing.T) {
 
 	// Test balance for non-existent customer
 	balance, err = repo.GetBalance(ctx, 999)
-	assert.NoError(t, err)
-	assert.Equal(t, 0.0, balance)
+	assert.Error(t, err) // Should return error for non-existent customer
 }
 
 func TestTransactionRepository_FindByDateRange(t *testing.T) {
 	db := setupTransactionTestDB()
-	repo := NewTransactionRepository(db)
+	repo := setupTransactionRepo(db)
 	ctx := context.Background()
 
 	now := time.Now()
@@ -179,10 +163,10 @@ func TestTransactionRepository_FindByDateRange(t *testing.T) {
 
 	// Create test data
 	transactions := []*domain.Transaction{
-		{CustomerID: 1, Amount: 100, Type: "1", CreatedAt: yesterday.Add(-1 * time.Hour)}, // before range
-		{CustomerID: 1, Amount: 50, Type: "1", CreatedAt: now},                            // in range
-		{CustomerID: 1, Amount: 20, Type: "2", CreatedAt: now.Add(1 * time.Hour)},         // in range
-		{CustomerID: 1, Amount: 30, Type: "1", CreatedAt: tomorrow.Add(1 * time.Hour)},    // after range
+		createTestTransaction(1, 100, 0, 100, "1", "", yesterday.Add(-1*time.Hour)), // before range
+		createTestTransaction(1, 50, 100, 150, "1", "", now),                        // in range
+		createTestTransaction(1, 20, 150, 130, "2", "", now.Add(1*time.Hour)),       // in range
+		createTestTransaction(1, 30, 130, 160, "1", "", tomorrow.Add(1*time.Hour)),  // after range
 	}
 
 	for _, tx := range transactions {
@@ -198,32 +182,27 @@ func TestTransactionRepository_FindByDateRange(t *testing.T) {
 
 func TestTransactionRepository_Update(t *testing.T) {
 	db := setupTransactionTestDB()
-	repo := NewTransactionRepository(db)
+	repo := setupTransactionRepo(db)
 	ctx := context.Background()
 
 	// Create test data
-	transaction := &domain.Transaction{
-		CustomerID: 1,
-		Amount:     100.50,
-		Type:       "1",
-		Notes:      "Initial notes",
-		CreatedAt:  time.Now(),
-	}
+	transaction := createTestTransaction(1, 100.50, 0, 100.50, "1", "Initial notes", time.Now())
 	db.Create(transaction)
 
 	// Update
-	transaction.Notes = "Updated notes"
+	notes := "Updated notes"
+	transaction.Notes = &notes
 	err := repo.Update(ctx, transaction)
 	assert.NoError(t, err)
 
 	// Verify update
 	found, _ := repo.FindByID(ctx, transaction.ID)
-	assert.Equal(t, "Updated notes", found.Notes)
+	assert.Equal(t, "Updated notes", *found.Notes)
 }
 
 func TestTransactionRepository_BeginTx(t *testing.T) {
 	db := setupTransactionTestDB()
-	repo := NewTransactionRepository(db)
+	repo := setupTransactionRepo(db)
 	ctx := context.Background()
 
 	// Test transaction begin

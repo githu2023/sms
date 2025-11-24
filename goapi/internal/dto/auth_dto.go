@@ -4,7 +4,8 @@ package dto
 
 // GetAPITokenRequest API Token 请求
 type GetAPITokenRequest struct {
-	Secret string `json:"secret" binding:"required"`
+	MerchantNo string `json:"merchant_no" binding:"required"` // 商户号
+	Secret     string `json:"secret" binding:"required"`      // API密钥
 }
 
 // GetAPITokenResponse API Token 响应

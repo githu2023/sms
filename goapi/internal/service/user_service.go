@@ -5,10 +5,10 @@ import (
 	"errors"
 	"sms-platform/goapi/internal/config"
 	"sms-platform/goapi/internal/domain"
+	"sms-platform/goapi/internal/utils"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -23,7 +23,7 @@ type UserService interface {
 	Register(ctx context.Context, username, email, password string) (*domain.Customer, error)
 	Login(ctx context.Context, username, password string) (string, error)
 	GetProfile(ctx context.Context, userID int64) (*domain.Customer, error)
-	GenerateAPIToken(ctx context.Context, apiSecretKey string) (string, error)
+	GenerateAPIToken(ctx context.Context, merchantNo, apiSecretKey string) (string, error)
 	UpdatePassword(ctx context.Context, userID int64, oldPassword, newPassword string) error
 }
 
@@ -39,23 +39,31 @@ func NewUserService(repo domain.CustomerRepository, jwtConfig config.JWTConfig) 
 
 // Register creates a new user.
 func (s *userService) Register(ctx context.Context, username, email, password string) (*domain.Customer, error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, err
+	// Check if user already exists
+	existingUser, _ := s.repo.FindByUsername(ctx, username)
+	if existingUser != nil {
+		return nil, errors.New("user already exists")
 	}
 
-	// Simple secret key generation for now
-	apiSecretKey := "secret_" + username
+	// Generate random API secret key (64 characters)
+	apiSecretKey := utils.GenerateRandomString(64)
+	passwordHashStr := utils.BcryptHash(password)
+	status := true // Active
+	merchanNo := utils.GenerateRandomMerchantNo()
+	parentID := int64(0)
 
 	customer := &domain.Customer{
-		Username:     username,
-		Email:        email,
-		PasswordHash: string(hashedPassword),
-		APISecretKey: apiSecretKey,
-		Status:       1, // Active
+		MerchantName: &username,  // 默认商户名是用户名
+		MerchantNo:   &merchanNo, // 随机6位数字
+		Username:     &username,
+		Email:        &email,
+		PasswordHash: &passwordHashStr,
+		APISecretKey: apiSecretKey, // 随机64位字符串
+		ParentID:     &parentID,    // 默认为0
+		Status:       &status,
 	}
 
-	err = s.repo.Create(ctx, customer)
+	err := s.repo.Create(ctx, customer)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +78,11 @@ func (s *userService) Login(ctx context.Context, username, password string) (str
 		return "", ErrUserNotFound
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(customer.PasswordHash), []byte(password)); err != nil {
+	if customer.PasswordHash == nil {
+		return "", ErrInvalidCredentials
+	}
+
+	if !utils.BcryptCheck(password, *customer.PasswordHash) {
 		return "", ErrInvalidCredentials
 	}
 
@@ -93,9 +105,9 @@ func (s *userService) GetProfile(ctx context.Context, userID int64) (*domain.Cus
 	return s.repo.FindByID(ctx, userID)
 }
 
-// GenerateAPIToken generates a JWT for API access based on the API secret key.
-func (s *userService) GenerateAPIToken(ctx context.Context, apiSecretKey string) (string, error) {
-	customer, err := s.repo.FindByAPISecretKey(ctx, apiSecretKey)
+// GenerateAPIToken generates a JWT for API access based on merchant number and API secret key.
+func (s *userService) GenerateAPIToken(ctx context.Context, merchantNo, apiSecretKey string) (string, error) {
+	customer, err := s.repo.FindByMerchantNoAndAPISecret(ctx, merchantNo, apiSecretKey)
 	if err != nil {
 		return "", ErrInvalidAPISecret // Specific error for invalid secret
 	}
@@ -124,18 +136,18 @@ func (s *userService) UpdatePassword(ctx context.Context, userID int64, oldPassw
 	}
 
 	// Verify old password
-	if err := bcrypt.CompareHashAndPassword([]byte(customer.PasswordHash), []byte(oldPassword)); err != nil {
+	if customer.PasswordHash == nil {
+		return ErrInvalidCredentials
+	}
+
+	if !utils.BcryptCheck(oldPassword, *customer.PasswordHash) {
 		return ErrInvalidCredentials
 	}
 
 	// Hash new password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return ErrPasswordUpdateFailed
-	}
-
+	passwordHashStr := utils.BcryptHash(newPassword)
 	// Update password hash
-	customer.PasswordHash = string(hashedPassword)
+	customer.PasswordHash = &passwordHashStr
 	if err := s.repo.Update(ctx, customer); err != nil {
 		return ErrPasswordUpdateFailed
 	}

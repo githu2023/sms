@@ -57,7 +57,7 @@ func JWTAuthMiddleware(jwtSecret string) gin.HandlerFunc {
 				c.Abort()
 				return
 			}
-			c.Set("user_id", userID) // 保持与原有代码一致
+			c.Set("customer_id", int64(userID)) // 设置为customer_id且转换为int64
 			c.Next()
 		} else {
 			common.RespondError(c, common.CodeUnauthorized)

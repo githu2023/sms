@@ -17,6 +17,19 @@ type MockTransactionRepository struct {
 	mock.Mock
 }
 
+func createServiceTestTransaction(id int64, customerID int64, amount float32, balanceBefore, balanceAfter float32, txType, notes string) *domain.Transaction {
+	return &domain.Transaction{
+		ID:            id,
+		CustomerID:    customerID,
+		Amount:        &amount,
+		BalanceBefore: &balanceBefore,
+		BalanceAfter:  &balanceAfter,
+		Type:          &txType,
+		Notes:         &notes,
+		CreatedAt:     time.Now(),
+	}
+}
+
 func (m *MockTransactionRepository) Create(ctx context.Context, transaction *domain.Transaction) error {
 	args := m.Called(ctx, transaction)
 	return args.Error(0)
@@ -90,11 +103,11 @@ func TestTransactionService_TopUp_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, transaction)
 	assert.Equal(t, customerID, transaction.CustomerID)
-	assert.Equal(t, amount, transaction.Amount)
-	assert.Equal(t, currentBalance, transaction.BalanceBefore)
-	assert.Equal(t, currentBalance+amount, transaction.BalanceAfter)
-	assert.Equal(t, "1", transaction.Type) // TopUp type
-	assert.Equal(t, notes, transaction.Notes)
+	assert.Equal(t, float32(amount), *transaction.Amount)
+	assert.Equal(t, float32(currentBalance), *transaction.BalanceBefore)
+	assert.Equal(t, float32(currentBalance+amount), *transaction.BalanceAfter)
+	assert.Equal(t, "1", *transaction.Type) // TopUp type
+	assert.Equal(t, notes, *transaction.Notes)
 
 	mockRepo.AssertExpectations(t)
 }
@@ -154,12 +167,12 @@ func TestTransactionService_Deduct_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, transaction)
 	assert.Equal(t, customerID, transaction.CustomerID)
-	assert.Equal(t, amount, transaction.Amount)
-	assert.Equal(t, currentBalance, transaction.BalanceBefore)
-	assert.Equal(t, currentBalance-amount, transaction.BalanceAfter)
-	assert.Equal(t, "2", transaction.Type) // Deduct type
-	assert.Equal(t, referenceID, transaction.ReferenceID)
-	assert.Equal(t, notes, transaction.Notes)
+	assert.Equal(t, float32(-amount), *transaction.Amount) // Deduct amounts should be negative
+	assert.Equal(t, float32(currentBalance), *transaction.BalanceBefore)
+	assert.Equal(t, float32(currentBalance-amount), *transaction.BalanceAfter)
+	assert.Equal(t, "2", *transaction.Type) // Deduct type
+	assert.Equal(t, referenceID, *transaction.ReferenceID)
+	assert.Equal(t, notes, *transaction.Notes)
 
 	mockRepo.AssertExpectations(t)
 }
@@ -251,8 +264,8 @@ func TestTransactionService_GetTransactionHistory_Success(t *testing.T) {
 	offset := 0
 
 	expectedTransactions := []*domain.Transaction{
-		{ID: 1, CustomerID: customerID, Amount: 100, Type: "1"},
-		{ID: 2, CustomerID: customerID, Amount: 50, Type: "2"},
+		createServiceTestTransaction(1, customerID, 100, 0, 100, "1", ""),
+		createServiceTestTransaction(2, customerID, 50, 100, 50, "2", ""),
 	}
 	expectedTotal := int64(25)
 
@@ -298,8 +311,8 @@ func TestTransactionService_GetTransactionsByType_Success(t *testing.T) {
 	offset := 0
 
 	expectedTransactions := []*domain.Transaction{
-		{ID: 1, CustomerID: customerID, Amount: 100, Type: "1"},
-		{ID: 3, CustomerID: customerID, Amount: 200, Type: "1"},
+		createServiceTestTransaction(1, customerID, 100, 0, 100, "1", ""),
+		createServiceTestTransaction(3, customerID, 200, 100, 300, "1", ""),
 	}
 	expectedTotal := int64(15)
 
@@ -339,10 +352,12 @@ func TestTransactionService_GetTransactionsByDateRange_Success(t *testing.T) {
 	limit := 10
 	offset := 0
 
-	expectedTransactions := []*domain.Transaction{
-		{ID: 1, CustomerID: customerID, Amount: 100, CreatedAt: startDate.Add(1 * time.Hour)},
-		{ID: 2, CustomerID: customerID, Amount: 50, CreatedAt: endDate.Add(-1 * time.Hour)},
-	}
+	tx1 := createServiceTestTransaction(1, customerID, 100, 0, 100, "1", "")
+	tx1.CreatedAt = startDate.Add(1 * time.Hour)
+	tx2 := createServiceTestTransaction(2, customerID, 50, 100, 50, "2", "")
+	tx2.CreatedAt = endDate.Add(-1 * time.Hour)
+
+	expectedTransactions := []*domain.Transaction{tx1, tx2}
 	expectedTotal := int64(8)
 
 	mockRepo.On("FindByDateRange", ctx, customerID, startDate, endDate, limit, offset).Return(expectedTransactions, expectedTotal, nil)

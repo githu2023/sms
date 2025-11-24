@@ -4,6 +4,7 @@ import (
 	"sms-platform/goapi/internal/api/handler"
 	"sms-platform/goapi/internal/api/middleware"
 	"sms-platform/goapi/internal/config"
+	"sms-platform/goapi/internal/global"
 	"sms-platform/goapi/internal/repository"
 	"sms-platform/goapi/internal/service"
 
@@ -27,25 +28,43 @@ func NewRouter(cfg config.Config) *gin.Engine { // Pass config to router
 	})
 
 	// --- Initialize Repositories ---
-	db := repository.GetDB() // GetDB() is safe to call here as InitDB has been called in main.go
+	db := global.GetDB() // GetDB() is safe to call here as InitDB has been called in main.go
 	customerRepo := repository.NewCustomerRepository(db)
 	businessTypeRepo := repository.NewBusinessTypeRepository(db)
-	transactionRepo := repository.NewTransactionRepository(db)
+	transactionRepo := repository.NewTransactionRepository(db, customerRepo)
 	logRepo := repository.NewLogRepository(db)
 	providerRepo := repository.NewProviderRepository(db)
 	assignmentRepo := repository.NewPhoneAssignmentRepository(db)
 	whitelistRepo := repository.NewWhitelistRepository(db)
+	customerBusinessConfigRepo := repository.NewCustomerBusinessConfigRepository(db)
+	platformBusinessTypeRepo := repository.NewPlatformBusinessTypeRepository(db)
+	platformProviderBusinessMappingRepo := repository.NewPlatformProviderBusinessMappingRepository(db)
+	providerBusinessTypeRepo := repository.NewProviderBusinessTypeRepository(db)
 
 	// --- Initialize Services ---
 	userService := service.NewUserService(customerRepo, cfg.JWT)
-	businessService := service.NewBusinessService(businessTypeRepo)
+	businessService := service.NewBusinessService(businessTypeRepo, customerBusinessConfigRepo)
 	transactionService := service.NewTransactionService(transactionRepo)
-	thirdPartyService := service.NewThirdPartyService()
-	phoneService := service.NewPhoneService(thirdPartyService, transactionRepo, logRepo, db)
+
+	phoneService := service.NewPhoneService(
+		transactionRepo,
+		logRepo,
+		assignmentRepo,
+		customerBusinessConfigRepo,
+		businessTypeRepo,
+		platformBusinessTypeRepo,
+		platformProviderBusinessMappingRepo,
+		providerBusinessTypeRepo,
+		customerRepo,
+		db,
+	)
 	assignmentService := service.NewAssignmentService(assignmentRepo, businessTypeRepo, providerRepo)
 	whitelistService := service.NewWhitelistService(whitelistRepo)
 
-	// --- Initialize Handlers ---
+	// Initialize and start scheduler service
+	// 使用全局ProviderManager，通过ProviderID查找对应的provider
+	schedulerService := service.NewSchedulerService(cfg.Scheduler, assignmentRepo, providerRepo, transactionRepo, customerRepo, db)
+	schedulerService.Start() // --- Initialize Handlers ---
 	userHandler := handler.NewUserHandler(userService, cfg.JWT)
 	businessHandler := handler.NewBusinessHandler(businessService)
 	authHandler := handler.NewAuthHandler(userService, cfg.JWT)
@@ -61,12 +80,12 @@ func NewRouter(cfg config.Config) *gin.Engine { // Pass config to router
 	{
 		clientV1.POST("/register", userHandler.Register)
 		clientV1.POST("/login", userHandler.Login)
-		clientV1.GET("/business_types", businessHandler.GetBusinessTypes)
 
 		// Authenticated routes for clientV1
 		clientAuth := clientV1.Group("/")
 		clientAuth.Use(middleware.JWTAuthMiddleware(cfg.JWT.Secret))
 		{
+			clientAuth.GET("/business_types", businessHandler.GetBusinessTypes)
 			clientAuth.GET("/profile", userHandler.GetProfile)
 			clientAuth.POST("/change_password", userHandler.UpdatePassword) // New
 			clientAuth.GET("/balance", balanceHandler.GetBalance)           // New

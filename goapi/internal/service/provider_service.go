@@ -25,9 +25,9 @@ func NewProviderService(repo domain.ProviderRepository) ProviderService {
 
 func (s *providerService) CreateProvider(ctx context.Context, name, apiConfig string, isEnabled bool) (*domain.Provider, error) {
 	provider := &domain.Provider{
-		Name:      name,
-		APIConfig: apiConfig,
-		IsEnabled: isEnabled,
+		Name:      &name,
+		APIConfig: &apiConfig,
+		IsEnabled: &isEnabled,
 	}
 	err := s.repo.Create(ctx, provider)
 	if err != nil {

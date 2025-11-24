@@ -1,13 +1,27 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"time"
 
-// Provider 第三方服务商表
+	"gorm.io/gorm"
+)
+
+// Provider 第三方运营商表
 type Provider struct {
-	ID        int    `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name      string `gorm:"not null" json:"name"`                    // 服务商名称
-	APIConfig string `gorm:"type:json" json:"-"`                      // 服务商的API配置 (如URL, key等)
-	IsEnabled bool   `gorm:"not null;default:true" json:"is_enabled"` // 是否启用该服务商
+	ID          int            `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name        *string        `gorm:"type:varchar(255);comment:三方名称" json:"name"`
+	Code        *string        `gorm:"type:varchar(50);comment:三方编码" json:"code"`
+	APIGateway  *string        `gorm:"type:text;comment:三方API网关地址" json:"api_gateway"`
+	MerchantID  *string        `gorm:"type:varchar(255);comment:三方商户号" json:"merchant_id"`
+	MerchantKey *string        `gorm:"type:text;comment:三方商户key" json:"merchant_key"`
+	Status      *bool          `gorm:"comment:启用状态" json:"status"`
+	Remark      *string        `gorm:"type:varchar(500);comment:备注" json:"remark"`
+	APIConfig   *string        `gorm:"type:text;comment:服务商的API配置 (如URL, key等)" json:"api_config"`
+	IsEnabled   *bool          `gorm:"comment:是否启用该服务商" json:"is_enabled"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 }
 
 // ProviderRepository defines the interface for provider data operations.

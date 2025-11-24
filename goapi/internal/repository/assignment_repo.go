@@ -3,8 +3,9 @@ package repository
 import (
 	"context"
 	"sms-platform/goapi/internal/domain"
-	"gorm.io/gorm"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // PhoneAssignmentRepository defines the interface for phone assignment data operations.
@@ -60,8 +61,8 @@ func (r *phoneAssignmentRepository) FindActiveByCustomerIDAndPhone(ctx context.C
 		db = tx
 	}
 	var assignment domain.PhoneAssignment
-	// Assuming status 1 means active/awaiting code
-	err := db.WithContext(ctx).Where("customer_id = ? AND phone_number = ? AND status = ?", customerID, phone, 1).First(&assignment).Error
+	// Assuming status "pending" means active/awaiting code
+	err := db.WithContext(ctx).Where("customer_id = ? AND phone_number = ? AND status = ?", customerID, phone, "pending").First(&assignment).Error
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +111,7 @@ func (r *phoneAssignmentRepository) UpdateVerificationCode(ctx context.Context, 
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
 			"verification_code": code,
-			"status":            2, // Status 2: completed
+			"status":            "completed",
 			"updated_at":        receivedAt,
 		}).Error
 }
@@ -121,15 +122,28 @@ func (r *phoneAssignmentRepository) UpdateStatus(ctx context.Context, tx *gorm.D
 	if tx != nil {
 		db = tx
 	}
+	var statusStr string
+	switch status {
+	case 1:
+		statusStr = "pending"
+	case 2:
+		statusStr = "completed"
+	case 3:
+		statusStr = "expired"
+	case 4:
+		statusStr = "failed"
+	default:
+		statusStr = "pending"
+	}
 	return db.WithContext(ctx).Model(&domain.PhoneAssignment{}).
 		Where("id = ?", id).
-		Update("status", status).Error
+		Update("status", statusStr).Error
 }
 
 // FindExpiredAssignments finds assignments that have expired and are still awaiting code
 func (r *phoneAssignmentRepository) FindExpiredAssignments(ctx context.Context, limit int) ([]*domain.PhoneAssignment, error) {
 	var assignments []*domain.PhoneAssignment
-	err := r.db.WithContext(ctx).Where("status = ? AND expires_at < ?", 1, time.Now()).Limit(limit).Find(&assignments).Error
+	err := r.db.WithContext(ctx).Where("status = ? AND created_at < ?", "pending", time.Now().Add(-5*time.Minute)).Limit(limit).Find(&assignments).Error
 	if err != nil {
 		return nil, err
 	}

@@ -69,7 +69,19 @@ func (s *assignmentService) GetAssignments(ctx context.Context, customerID int64
 	for _, assignment := range allAssignments {
 		match := true
 
-		if status != 0 && assignment.Status != status {
+		// Convert status int to string and compare
+		var statusStr string
+		switch status {
+		case 1:
+			statusStr = "pending"
+		case 2:
+			statusStr = "completed"
+		case 3:
+			statusStr = "expired"
+		case 4:
+			statusStr = "failed"
+		}
+		if status != 0 && (assignment.Status == nil || *assignment.Status != statusStr) {
 			match = false
 		}
 		// Need to resolve BusinessTypeID to Code
@@ -125,7 +137,10 @@ func (s *assignmentService) GetCostStatistics(ctx context.Context, customerID in
 		}
 
 		if match {
-			totalCost += assignment.Cost
+			// Use MerchantFee as the cost field
+			if assignment.MerchantFee != nil {
+				totalCost += float64(*assignment.MerchantFee)
+			}
 			totalCount++
 		}
 	}

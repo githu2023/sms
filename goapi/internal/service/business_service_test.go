@@ -53,9 +53,54 @@ func (m *MockBusinessTypeRepository) Delete(ctx context.Context, id int) error {
 	return args.Error(0)
 }
 
+// MockCustomerBusinessConfigRepository is a mock implementation of the CustomerBusinessConfigRepository interface.
+type MockCustomerBusinessConfigRepository struct {
+	mock.Mock
+}
+
+func (m *MockCustomerBusinessConfigRepository) Create(ctx context.Context, config *domain.CustomerBusinessConfig) error {
+	args := m.Called(ctx, config)
+	return args.Error(0)
+}
+
+func (m *MockCustomerBusinessConfigRepository) FindByCustomerIDAndBusinessCode(ctx context.Context, customerID int64, businessCode string) (*domain.CustomerBusinessConfig, error) {
+	args := m.Called(ctx, customerID, businessCode)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.CustomerBusinessConfig), args.Error(1)
+}
+
+func (m *MockCustomerBusinessConfigRepository) FindByCustomerID(ctx context.Context, customerID int64) ([]*domain.CustomerBusinessConfig, error) {
+	args := m.Called(ctx, customerID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.CustomerBusinessConfig), args.Error(1)
+}
+
+func (m *MockCustomerBusinessConfigRepository) Update(ctx context.Context, config *domain.CustomerBusinessConfig) error {
+	args := m.Called(ctx, config)
+	return args.Error(0)
+}
+
+func (m *MockCustomerBusinessConfigRepository) Delete(ctx context.Context, id int64) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockCustomerBusinessConfigRepository) FindByCustomerIDAndEnabled(ctx context.Context, customerID int64) ([]*domain.CustomerBusinessConfig, error) {
+	args := m.Called(ctx, customerID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.CustomerBusinessConfig), args.Error(1)
+}
+
 func TestBusinessService_CreateBusinessType(t *testing.T) {
 	mockRepo := new(MockBusinessTypeRepository)
-	businessService := NewBusinessService(mockRepo)
+	mockCustomerBusinessConfigRepo := new(MockCustomerBusinessConfigRepository)
+	businessService := NewBusinessService(mockRepo, mockCustomerBusinessConfigRepo)
 	ctx := context.Background()
 
 	businessType := &domain.BusinessType{
@@ -74,7 +119,8 @@ func TestBusinessService_CreateBusinessType(t *testing.T) {
 
 func TestBusinessService_GetBusinessTypeByID(t *testing.T) {
 	mockRepo := new(MockBusinessTypeRepository)
-	businessService := NewBusinessService(mockRepo)
+	mockCustomerBusinessConfigRepo := new(MockCustomerBusinessConfigRepository)
+	businessService := NewBusinessService(mockRepo, mockCustomerBusinessConfigRepo)
 	ctx := context.Background()
 
 	businessType := &domain.BusinessType{ID: 1, Name: "TestBT"}
@@ -89,7 +135,8 @@ func TestBusinessService_GetBusinessTypeByID(t *testing.T) {
 
 func TestBusinessService_GetBusinessTypeByCode(t *testing.T) {
 	mockRepo := new(MockBusinessTypeRepository)
-	businessService := NewBusinessService(mockRepo)
+	mockCustomerBusinessConfigRepo := new(MockCustomerBusinessConfigRepository)
+	businessService := NewBusinessService(mockRepo, mockCustomerBusinessConfigRepo)
 	ctx := context.Background()
 
 	businessType := &domain.BusinessType{ID: 1, Code: "test_code"}
@@ -104,7 +151,8 @@ func TestBusinessService_GetBusinessTypeByCode(t *testing.T) {
 
 func TestBusinessService_ListBusinessTypes(t *testing.T) {
 	mockRepo := new(MockBusinessTypeRepository)
-	businessService := NewBusinessService(mockRepo)
+	mockCustomerBusinessConfigRepo := new(MockCustomerBusinessConfigRepository)
+	businessService := NewBusinessService(mockRepo, mockCustomerBusinessConfigRepo)
 	ctx := context.Background()
 
 	businessTypes := []*domain.BusinessType{
@@ -122,7 +170,8 @@ func TestBusinessService_ListBusinessTypes(t *testing.T) {
 
 func TestBusinessService_UpdateBusinessType(t *testing.T) {
 	mockRepo := new(MockBusinessTypeRepository)
-	businessService := NewBusinessService(mockRepo)
+	mockCustomerBusinessConfigRepo := new(MockCustomerBusinessConfigRepository)
+	businessService := NewBusinessService(mockRepo, mockCustomerBusinessConfigRepo)
 	ctx := context.Background()
 
 	businessType := &domain.BusinessType{ID: 1, Name: "UpdatedBT"}
@@ -136,7 +185,8 @@ func TestBusinessService_UpdateBusinessType(t *testing.T) {
 
 func TestBusinessService_DeleteBusinessType(t *testing.T) {
 	mockRepo := new(MockBusinessTypeRepository)
-	businessService := NewBusinessService(mockRepo)
+	mockCustomerBusinessConfigRepo := new(MockCustomerBusinessConfigRepository)
+	businessService := NewBusinessService(mockRepo, mockCustomerBusinessConfigRepo)
 	ctx := context.Background()
 
 	mockRepo.On("Delete", ctx, 1).Return(nil)

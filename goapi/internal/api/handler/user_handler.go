@@ -41,14 +41,24 @@ func (h *UserHandler) Register(c *gin.Context) {
 	// TODO: Get Registration IP from middleware
 	customer, err := h.userService.Register(c.Request.Context(), req.Username, req.Email, req.Password)
 	if err != nil {
-		// Differentiate between different error types (e.g., user already exists)
+		// Check if user already exists
+		if err.Error() == "user already exists" {
+			common.RespondError(c, common.CodeBadRequest)
+			return
+		}
+		// Other errors
 		common.RespondError(c, common.CodeInternalError)
 		return
 	}
 
+	username := ""
+	if customer.Username != nil {
+		username = *customer.Username
+	}
+
 	response := dto.RegisterResponse{
 		UserID:   customer.ID,
-		Username: customer.Username,
+		Username: username,
 	}
 
 	c.JSON(201, common.SuccessResponse(response))
@@ -103,19 +113,18 @@ func (h *UserHandler) Login(c *gin.Context) {
 // @Router /client/v1/profile [get]
 func (h *UserHandler) GetProfile(c *gin.Context) {
 	// Assuming user ID is set in context by a JWT middleware
-	userIDVal, exists := c.Get("user_id")
+	userIDVal, exists := c.Get("customer_id")
 	if !exists {
 		common.RespondError(c, common.CodeUnauthorized)
 		return
 	}
 
-	// JWT claims often parse numbers as float64
-	userIDFloat, ok := userIDVal.(float64)
+	// JWT middleware sets customer_id as int64 directly
+	userID, ok := userIDVal.(int64)
 	if !ok {
 		common.RespondError(c, common.CodeUnauthorized)
 		return
 	}
-	userID := int64(userIDFloat)
 
 	customer, err := h.userService.GetProfile(c.Request.Context(), userID)
 	if err != nil {
@@ -132,13 +141,28 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 		lastLoginAt = customer.LastLoginAt.Format(time.RFC3339)
 	}
 
+	username := ""
+	if customer.Username != nil {
+		username = *customer.Username
+	}
+
+	email := ""
+	if customer.Email != nil {
+		email = *customer.Email
+	}
+
+	registrationIP := ""
+	if customer.RegistrationIP != nil {
+		registrationIP = *customer.RegistrationIP
+	}
+
 	response := dto.ProfileResponse{
 		UserID:         customer.ID,
-		Username:       customer.Username,
-		Email:          customer.Email,
+		Username:       username,
+		Email:          email,
 		Balance:        customer.Balance,
 		APISecretKey:   customer.APISecretKey,
-		RegistrationIP: customer.RegistrationIP,
+		RegistrationIP: registrationIP,
 		LastLoginAt:    lastLoginAt,
 	}
 	common.RespondSuccess(c, response)

@@ -6,10 +6,11 @@ import (
 
 // Config holds all configuration for the application.
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Database  DatabaseConfig  `mapstructure:"database"`
+	Redis     RedisConfig     `mapstructure:"redis"`
+	JWT       JWTConfig       `mapstructure:"jwt"`
+	Scheduler SchedulerConfig `mapstructure:"scheduler"`
 }
 
 // JWTConfig holds JWT specific configuration.
@@ -40,6 +41,13 @@ type RedisConfig struct {
 	Port     int    `mapstructure:"port"`
 	Password string `mapstructure:"password"`
 	DB       int    `mapstructure:"db"`
+}
+
+// SchedulerConfig holds task scheduler configuration.
+type SchedulerConfig struct {
+	CodeCheckInterval         int `mapstructure:"code_check_interval"`         // 验证码检查间隔 (秒)
+	CodeTimeout               int `mapstructure:"code_timeout"`                // 验证码获取超时时间 (秒)
+	AssignmentCleanupInterval int `mapstructure:"assignment_cleanup_interval"` // 过期分配清理间隔 (秒)
 }
 
 // LoadConfig reads configuration from file or environment variables.

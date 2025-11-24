@@ -2,9 +2,11 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"sms-platform/goapi/internal/common"
 	"sms-platform/goapi/internal/dto"
 	"sms-platform/goapi/internal/service"
+	"sms-platform/goapi/internal/utils"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -22,9 +24,9 @@ func NewPhoneHandler(phoneService service.PhoneServiceInterface) *PhoneHandler {
 	}
 }
 
-// GetPhone 获取手机号
-// @Summary 获取手机号
-// @Description 为指定的业务类型获取一个可用的手机号码
+// GetPhone 批量获取手机号
+// @Summary 批量获取手机号
+// @Description 为指定的业务类型批量获取手机号码（1-10个）
 // @Tags Phone
 // @Accept json
 // @Produce json
@@ -43,26 +45,18 @@ func (h *PhoneHandler) GetPhone(c *gin.Context) {
 		return
 	}
 
-	// 获取用户ID
-	customerID, exists := c.Get("customer_id")
-	if !exists {
-		common.RespondError(c, common.CodeUnauthorized)
-		return
+	// 设置默认值，如果没有指定count则默认1
+	if req.Count <= 0 {
+		req.Count = 1
+	}
+	// 限制最多10个
+	if req.Count > 10 {
+		req.Count = 10
 	}
 
-	// 类型断言
-	var userID uint
-	switch id := customerID.(type) {
-	case uint:
-		userID = id
-	case int:
-		userID = uint(id)
-	case int64:
-		userID = uint(id)
-	case float64:
-		userID = uint(id)
-	default:
-		common.RespondErrorWithMsg(c, common.CodeUnauthorized, "用户ID格式错误")
+	// 获取用户ID
+	userID, ok := utils.RequireCustomerID(c)
+	if !ok {
 		return
 	}
 
@@ -70,39 +64,41 @@ func (h *PhoneHandler) GetPhone(c *gin.Context) {
 	ctx := context.WithValue(c.Request.Context(), "ip_address", c.ClientIP())
 	ctx = context.WithValue(ctx, "user_agent", c.GetHeader("User-Agent"))
 
-	// 调用服务获取手机号
-	result, err := h.phoneService.GetPhone(ctx, userID, req.BusinessType, req.CardType)
-	if err != nil {
-		// 根据不同错误类型返回对应的错误码
-		switch err {
-		case common.ErrInsufficientBalance:
-			common.RespondError(c, common.CodeInsufficientBalance)
-		default:
-			if err.Error() == "no healthy providers available" {
-				common.RespondError(c, common.CodeThirdPartyError)
-			} else {
-				common.RespondErrorWithMsg(c, common.CodeInternalError, "获取手机号失败: "+err.Error())
-			}
-		}
+	// 初始化响应结构
+	response := &dto.GetPhoneResponse{
+		Phones:       make([]dto.PhoneInfo, 0, req.Count),
+		TotalCost:    0,
+		SuccessCount: 0,
+		FailedCount:  0,
+	}
+
+	result, errCode := h.phoneService.GetPhone(ctx, userID, req.BusinessType, req.CardType, req.Count)
+	if errCode != common.CodeSuccess {
+		common.RespondError(c, errCode)
 		return
 	}
 
-	// 构造响应
-	response := &dto.GetPhoneResponse{
-		PhoneNumber:      result.PhoneNumber,
-		CountryCode:      result.CountryCode,
-		Cost:             result.Cost,
-		ValidUntil:       result.ValidUntil,
-		ProviderID:       result.ProviderID,
-		RemainingBalance: result.Balance,
+	for _, phone := range result {
+		// 	// 添加成功获取的手机号
+		phoneInfo := dto.PhoneInfo{
+			PhoneNumber: phone.PhoneNumber,
+			CountryCode: phone.CountryCode,
+			Cost:        phone.Cost,
+			ValidUntil:  phone.ValidUntil,
+			ProviderID:  phone.ProviderID,
+		}
+		response.Phones = append(response.Phones, phoneInfo)
+		response.TotalCost += phone.Cost
+		response.SuccessCount++
+		response.RemainingBalance = phone.Balance // 使用最新的余额
 	}
 
 	common.RespondSuccess(c, response)
 }
 
-// GetCode 获取验证码
-// @Summary 获取验证码
-// @Description 获取指定手机号的短信验证码，支持长轮询
+// GetCode 批量获取验证码
+// @Summary 批量获取验证码
+// @Description 批量获取指定手机号的短信验证码。如果验证码还未获取到，返回等待状态，客户端需要再次请求。
 // @Tags Phone
 // @Accept json
 // @Produce json
@@ -122,65 +118,98 @@ func (h *PhoneHandler) GetCode(c *gin.Context) {
 		return
 	}
 
+	// 验证手机号数量
+	if len(req.PhoneNumbers) == 0 {
+		common.RespondErrorWithMsg(c, common.CodeBadRequest, "手机号列表不能为空")
+		return
+	}
+	if len(req.PhoneNumbers) > 10 {
+		common.RespondErrorWithMsg(c, common.CodeBadRequest, "手机号数量不能超过10个")
+		return
+	}
+
 	// 获取用户ID
-	customerID, exists := c.Get("customer_id")
-	if !exists {
-		common.RespondError(c, common.CodeUnauthorized)
+	userID, ok := utils.RequireCustomerID(c)
+	if !ok {
 		return
-	}
-
-	// 类型断言
-	var userID uint
-	switch id := customerID.(type) {
-	case uint:
-		userID = id
-	case int:
-		userID = uint(id)
-	case int64:
-		userID = uint(id)
-	case float64:
-		userID = uint(id)
-	default:
-		common.RespondErrorWithMsg(c, common.CodeUnauthorized, "用户ID格式错误")
-		return
-	}
-
-	// 设置默认超时时间
-	timeout := time.Duration(req.Timeout) * time.Second
-	if req.Timeout <= 0 {
-		timeout = 60 * time.Second // 默认60秒
-	}
-	if timeout > 5*time.Minute {
-		timeout = 5 * time.Minute // 最大5分钟
 	}
 
 	// 添加请求上下文信息
 	ctx := context.WithValue(c.Request.Context(), "ip_address", c.ClientIP())
 	ctx = context.WithValue(ctx, "user_agent", c.GetHeader("User-Agent"))
 
-	// 调用服务获取验证码
-	result, err := h.phoneService.GetCode(ctx, userID, req.PhoneNumber, timeout)
-	if err != nil {
-		// 根据不同错误类型返回对应的错误码
-		switch err {
-		case common.ErrCodeTimeout:
-			common.RespondError(c, common.CodeCodeTimeout)
-		default:
-			if err.Error() == "no provider could retrieve code for phone" {
-				common.RespondError(c, common.CodePhoneNotFound)
-			} else {
-				common.RespondErrorWithMsg(c, common.CodeGetCodeFailed, "获取验证码失败: "+err.Error())
-			}
-		}
-		return
+	// 初始化响应结构
+	response := &dto.GetCodeResponse{
+		Codes:        make([]dto.CodeInfo, 0, len(req.PhoneNumbers)),
+		SuccessCount: 0,
+		PendingCount: 0,
+		FailedCount:  0,
 	}
 
-	// 构造响应
-	response := &dto.GetCodeResponse{
-		Code:       result.Code,
-		Message:    result.Message,
-		ReceivedAt: result.ReceivedAt,
-		ProviderID: result.ProviderID,
+	// 使用 channel 和 goroutine 并发获取验证码
+	type codeResult struct {
+		phone  string
+		result interface{} // 可能是 CodeInfo 或 error
+	}
+
+	resultChan := make(chan codeResult, len(req.PhoneNumbers))
+
+	// 启动并发获取
+	for _, phone := range req.PhoneNumbers {
+		go func(phoneNumber string) {
+			results, err := h.phoneService.GetCode(ctx, userID, phoneNumber)
+			if err != nil {
+				resultChan <- codeResult{phone: phoneNumber, result: err}
+			} else if len(results) > 0 {
+				// 取第一个结果
+				result := results[0]
+				codeInfo := dto.CodeInfo{
+					PhoneNumber: phoneNumber,
+					Code:        result.Code,
+					Message:     result.Message,
+					ReceivedAt:  result.ReceivedAt,
+					ProviderID:  result.ProviderID,
+				}
+
+				// 根据 code 是否为空判断状态
+				if result.Code != "" {
+					codeInfo.Status = "success"
+				} else {
+					// code 为空表示等待中，客户端需要再次请求
+					codeInfo.Status = "pending"
+				}
+
+				resultChan <- codeResult{phone: phoneNumber, result: codeInfo}
+			} else {
+				resultChan <- codeResult{phone: phoneNumber, result: fmt.Errorf("no code result")}
+			}
+		}(phone)
+	}
+
+	// 收集结果
+	for i := 0; i < len(req.PhoneNumbers); i++ {
+		result := <-resultChan
+		switch r := result.result.(type) {
+		case dto.CodeInfo:
+			response.Codes = append(response.Codes, r)
+			if r.Status == "success" {
+				response.SuccessCount++
+			} else if r.Status == "pending" {
+				response.PendingCount++
+			}
+		case error:
+			// 处理错误情况
+			codeInfo := dto.CodeInfo{
+				PhoneNumber: result.phone,
+				Code:        "",
+				Message:     r.Error(),
+				ReceivedAt:  time.Now(),
+				ProviderID:  "",
+				Status:      "failed",
+			}
+			response.FailedCount++
+			response.Codes = append(response.Codes, codeInfo)
+		}
 	}
 
 	common.RespondSuccess(c, response)
@@ -207,9 +236,8 @@ func (h *PhoneHandler) GetPhoneStatus(c *gin.Context) {
 	}
 
 	// 获取用户ID
-	customerID, exists := c.Get("customer_id")
-	if !exists {
-		common.RespondError(c, common.CodeUnauthorized)
+	customerID, ok := utils.RequireCustomerID(c)
+	if !ok {
 		return
 	}
 

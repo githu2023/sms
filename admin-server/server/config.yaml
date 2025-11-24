@@ -141,8 +141,8 @@ mysql:
     port: "3306"
     config: charset=utf8mb4&parseTime=True&loc=Local
     db-name: sms_platform
-    username: dog
-    password: 123456
+    username: root
+    password: Aa123456
     path: 127.0.0.1
     engine: ""
     log-mode: error

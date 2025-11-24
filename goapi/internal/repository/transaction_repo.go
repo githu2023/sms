@@ -22,12 +22,16 @@ type TransactionRepository interface {
 
 // transactionRepository is the implementation of TransactionRepository
 type transactionRepository struct {
-	db *gorm.DB
+	db           *gorm.DB
+	customerRepo domain.CustomerRepository
 }
 
 // NewTransactionRepository creates a new instance of TransactionRepository
-func NewTransactionRepository(db *gorm.DB) TransactionRepository {
-	return &transactionRepository{db: db}
+func NewTransactionRepository(db *gorm.DB, customerRepo domain.CustomerRepository) TransactionRepository {
+	return &transactionRepository{
+		db:           db,
+		customerRepo: customerRepo,
+	}
 }
 
 // Create adds a new transaction
@@ -116,22 +120,14 @@ func (r *transactionRepository) FindByDateRange(ctx context.Context, customerID 
 	return transactions, total, nil
 }
 
-// GetBalance calculates the current balance for a customer
+// GetBalance gets the current balance from customer repository
 func (r *transactionRepository) GetBalance(ctx context.Context, customerID int64) (float64, error) {
-	var result struct {
-		Balance float64
-	}
-
-	err := r.db.WithContext(ctx).Model(&domain.Transaction{}).
-		Select("COALESCE(SUM(CASE WHEN type = '1' THEN amount WHEN type = '2' THEN -amount ELSE 0 END), 0) as balance").
-		Where("customer_id = ?", customerID).
-		Scan(&result).Error
-
+	customer, err := r.customerRepo.FindByID(ctx, customerID)
 	if err != nil {
 		return 0, err
 	}
 
-	return result.Balance, nil
+	return customer.Balance, nil
 }
 
 // Update updates a transaction

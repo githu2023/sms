@@ -59,7 +59,21 @@ func APITokenAuthMiddleware(jwtSecret string) gin.HandlerFunc {
 			}
 
 			userID := claims["user_id"]
-			c.Set("userID", userID) // Changed to userID for consistency
+			// 转换为int64类型
+			var customerID int64
+			switch id := userID.(type) {
+			case float64:
+				customerID = int64(id)
+			case int64:
+				customerID = id
+			case int:
+				customerID = int64(id)
+			default:
+				common.RespondError(c, common.CodeUnauthorized)
+				c.Abort()
+				return
+			}
+			c.Set("customer_id", customerID) // 设置为customer_id且确保为int64
 			c.Next()
 		} else {
 			common.RespondError(c, common.CodeUnauthorized)
