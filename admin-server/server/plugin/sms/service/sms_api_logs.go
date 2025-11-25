@@ -67,7 +67,9 @@ func (s *smsApiLogs) GetSmsApiLogsInfoList(ctx context.Context, info request.Sms
     }
 
 	if limit != 0 {
-       db = db.Limit(limit).Offset(offset)
+       db = db.Order("id desc").Limit(limit).Offset(offset)
+    } else {
+       db = db.Order("id desc")
     }
 	err = db.Find(&smsApiLogss).Error
 	return  smsApiLogss, total, err

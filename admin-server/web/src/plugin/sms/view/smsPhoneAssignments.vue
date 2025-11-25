@@ -75,6 +75,12 @@
             <template #default="scope">{{ formatDate(scope.row.CreatedAt) }}</template>
         </el-table-column>
         
+            <el-table-column align="left" label="运营商" prop="providerId" width="120">
+              <template #default="scope">
+                {{ getProviderName(scope.row.providerId) }}
+              </template>
+            </el-table-column>
+        
             <el-table-column align="left" label="业务名称" prop="businessName" width="140" />
 
             <el-table-column align="left" label="业务编码" prop="businessCode" width="120" />
@@ -194,6 +200,9 @@
 
     <el-drawer destroy-on-close size="800" v-model="detailShow" :show-close="true" :before-close="closeDetailShow" title="查看">
             <el-descriptions :column="1" border>
+                 <el-descriptions-item label="运营商">
+    {{ getProviderName(detailForm.providerId) }}
+</el-descriptions-item>
                  <el-descriptions-item label="业务名称">
     {{ detailForm.businessName }}
 </el-descriptions-item>
@@ -257,6 +266,7 @@ import {
   findSmsPhoneAssignments,
   getSmsPhoneAssignmentsList
 } from '@/plugin/sms/api/smsPhoneAssignments'
+import { getSmsProvidersList } from '@/plugin/sms/api/smsProviders'
 
 // 全量引入格式化工具 请按需保留
 import { getDictFunc, formatDate, formatBoolean, filterDict ,filterDataSource, returnArrImg, onDownloadFile } from '@/utils/format'
@@ -275,6 +285,9 @@ const btnLoading = ref(false)
 
 // 控制更多查询条件显示/隐藏状态
 const showAllQuery = ref(false)
+
+// 运营商列表
+const providersList = ref([])
 
 // 自动化生成的字典（可能为空）以及字段
 const formData = ref({
@@ -352,8 +365,24 @@ getTableData()
 
 // ============== 表格控制部分结束 ===============
 
+// 加载运营商列表
+const loadProvidersList = async () => {
+  const res = await getSmsProvidersList({ page: 1, pageSize: 999 })
+  if (res.code === 0) {
+    providersList.value = res.data.list || []
+  }
+}
+
+// 根据ID获取运营商名称
+const getProviderName = (providerId) => {
+  if (!providerId) return '-'
+  const provider = providersList.value.find(p => p.ID === providerId)
+  return provider ? provider.name : providerId
+}
+
 // 获取需要的字典 可能为空 按需保留
 const setOptions = async () =>{
+  await loadProvidersList()
 }
 
 // 获取需要的字典 可能为空 按需保留

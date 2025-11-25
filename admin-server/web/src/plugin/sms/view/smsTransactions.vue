@@ -82,7 +82,7 @@
       </el-table-column>
             <el-table-column align="left" label="引用ID" prop="referenceId" width="100" />
 
-            <el-table-column align="left" label="备注" prop="notes" width="150" />
+            <el-table-column align="left" label="备注" prop="notes" width="250" show-overflow-tooltip />
 
         <el-table-column align="left" label="操作" fixed="right" min-width="240">
             <template #default="scope">

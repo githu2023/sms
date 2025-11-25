@@ -82,7 +82,9 @@ func (s *smsPhoneAssignments) GetSmsPhoneAssignmentsInfoList(ctx context.Context
     }
 
 	if limit != 0 {
-       db = db.Limit(limit).Offset(offset)
+       db = db.Order("id desc").Limit(limit).Offset(offset)
+    } else {
+       db = db.Order("id desc")
     }
 	err = db.Find(&smsPhoneAssignmentss).Error
 	return  smsPhoneAssignmentss, total, err
