@@ -79,6 +79,7 @@
   "assignmentResult": "分配结果",
   "verificationCode": "验证码",
   "waitingForCode": "等待验证码中...",
+  "noCodeReceived": "未收到验证码",
   "retryGetCode": "重试获取",
   "requestCount": "请求数量",
   "requestCountHelper": "每次最多10个手机号",
@@ -99,6 +100,7 @@
   "receivedAtLabel": "接收时间",
   "statusSuccess": "成功",
   "statusPending": "等待",
+  "statusActive": "激活中",
   "statusFailed": "失败",
   "getCodeInstructions": "可同时查询最多10个手机号，若状态为等待请继续轮询此接口。",
   "currentPasswordLabel": "当前密码",
@@ -116,5 +118,26 @@
   "deleteWhitelistConfirm": "确认删除以下IP？",
   "notesOptional": "备注（可选）",
   "ipAddressRequired": "请输入IP地址或CIDR网段",
-  "invalidIpFormat": "IP地址或CIDR格式不正确"
+  "invalidIpFormat": "IP地址或CIDR格式不正确",
+  "viewAll": "查看全部",
+  "recentRecords": "最近记录",
+  "pullDownToRefresh": "下拉刷新，上滑加载更多",
+  "noMoreData": "没有更多了",
+  "loadMore": "加载更多",
+  "copy": "复制",
+  "totalRecords": "共 {count} 条记录",
+  "@totalRecords": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "refresh": "刷新",
+  "loadingFailed": "加载失败",
+  "noAvailableBusinessTypes": "暂无可用的业务类型，请联系管理员配置",
+  "getBusinessTypesFailed": "获取业务类型失败",
+  "getFailed": "获取失败",
+  "registerFailed": "注册失败",
+  "registerSuccess": "注册成功！请登录"
 }

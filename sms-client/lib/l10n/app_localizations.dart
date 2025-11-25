@@ -569,6 +569,12 @@ abstract class AppLocalizations {
   /// **'等待验证码中...'**
   String get waitingForCode;
 
+  /// No description provided for @noCodeReceived.
+  ///
+  /// In zh, this message translates to:
+  /// **'未收到验证码'**
+  String get noCodeReceived;
+
   /// No description provided for @retryGetCode.
   ///
   /// In zh, this message translates to:
@@ -689,6 +695,12 @@ abstract class AppLocalizations {
   /// **'等待'**
   String get statusPending;
 
+  /// No description provided for @statusActive.
+  ///
+  /// In zh, this message translates to:
+  /// **'激活中'**
+  String get statusActive;
+
   /// No description provided for @statusFailed.
   ///
   /// In zh, this message translates to:
@@ -796,6 +808,90 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'IP地址或CIDR格式不正确'**
   String get invalidIpFormat;
+
+  /// No description provided for @viewAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看全部'**
+  String get viewAll;
+
+  /// No description provided for @recentRecords.
+  ///
+  /// In zh, this message translates to:
+  /// **'最近记录'**
+  String get recentRecords;
+
+  /// No description provided for @pullDownToRefresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'下拉刷新，上滑加载更多'**
+  String get pullDownToRefresh;
+
+  /// No description provided for @noMoreData.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有更多了'**
+  String get noMoreData;
+
+  /// No description provided for @loadMore.
+  ///
+  /// In zh, this message translates to:
+  /// **'加载更多'**
+  String get loadMore;
+
+  /// No description provided for @copy.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制'**
+  String get copy;
+
+  /// No description provided for @totalRecords.
+  ///
+  /// In zh, this message translates to:
+  /// **'共 {count} 条记录'**
+  String totalRecords(int count);
+
+  /// No description provided for @refresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新'**
+  String get refresh;
+
+  /// No description provided for @loadingFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'加载失败'**
+  String get loadingFailed;
+
+  /// No description provided for @noAvailableBusinessTypes.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无可用的业务类型，请联系管理员配置'**
+  String get noAvailableBusinessTypes;
+
+  /// No description provided for @getBusinessTypesFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'获取业务类型失败'**
+  String get getBusinessTypesFailed;
+
+  /// No description provided for @getFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'获取失败'**
+  String get getFailed;
+
+  /// No description provided for @registerFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'注册失败'**
+  String get registerFailed;
+
+  /// No description provided for @registerSuccess.
+  ///
+  /// In zh, this message translates to:
+  /// **'注册成功！请登录'**
+  String get registerSuccess;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

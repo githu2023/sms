@@ -40,16 +40,18 @@ class _RegisterPageState extends State<RegisterPage> {
 
     if (!mounted) return;
 
+    final l10n = AppLocalizations.of(context)!;
+    
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('注册成功！请登录'),
+        SnackBar(
+          content: Text(l10n.registerSuccess),
           backgroundColor: Colors.green,
         ),
       );
       Navigator.of(context).pop();
     } else {
-      final errorMsg = authProvider.error ?? '注册失败';
+      final errorMsg = authProvider.error ?? l10n.registerFailed;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMsg),

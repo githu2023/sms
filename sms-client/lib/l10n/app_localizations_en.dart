@@ -246,6 +246,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get waitingForCode => 'Waiting for code...';
 
   @override
+  String get noCodeReceived => 'No code received';
+
+  @override
   String get retryGetCode => 'Retry';
 
   @override
@@ -306,6 +309,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusPending => 'Pending';
 
   @override
+  String get statusActive => 'Active';
+
+  @override
   String get statusFailed => 'Failed';
 
   @override
@@ -358,4 +364,48 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get invalidIpFormat => 'Invalid IP or CIDR format';
+
+  @override
+  String get viewAll => 'View All';
+
+  @override
+  String get recentRecords => 'Recent Records';
+
+  @override
+  String get pullDownToRefresh => 'Pull down to refresh, scroll up to load more';
+
+  @override
+  String get noMoreData => 'No more data';
+
+  @override
+  String get loadMore => 'Load More';
+
+  @override
+  String get copy => 'Copy';
+
+  @override
+  String totalRecords(int count) {
+    return 'Total $count records';
+  }
+
+  @override
+  String get refresh => 'Refresh';
+
+  @override
+  String get loadingFailed => 'Loading failed';
+
+  @override
+  String get noAvailableBusinessTypes => 'No business types available, please contact administrator';
+
+  @override
+  String get getBusinessTypesFailed => 'Failed to get business types';
+
+  @override
+  String get getFailed => 'Failed to get';
+
+  @override
+  String get registerFailed => 'Registration failed';
+
+  @override
+  String get registerSuccess => 'Registration successful! Please login';
 }

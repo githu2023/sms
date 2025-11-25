@@ -19,26 +19,33 @@ class Assignment {
 
   factory Assignment.fromJson(Map<String, dynamic> json) {
     // 状态映射：数字状态转为字符串
+    // 根据 API 文档: 1=pending、2=completed、3=expired、4=failed
     String statusFromInt(int statusCode) {
       switch (statusCode) {
         case 1:
           return 'pending'; // 等待中
         case 2:
-          return 'active'; // 激活中
-        case 3:
           return 'completed'; // 已完成
-        case 4:
+        case 3:
           return 'expired'; // 已过期
+        case 4:
+          return 'failed'; // 失败
         default:
           return 'unknown';
       }
+    }
+
+    // 处理 code 字段：支持 verification_code 和 code 两种字段名，空字符串转为 null
+    String? codeValue = (json['verification_code'] ?? json['code']) as String?;
+    if (codeValue != null && codeValue.isEmpty) {
+      codeValue = null;
     }
 
     return Assignment(
       phone: (json['phone_number'] ?? json['phone']) as String,
       businessType: json['business_type'] as String,
       cardType: json['card_type'] as String,
-      code: json['code'] as String?,
+      code: codeValue,
       cost: (json['cost'] as num).toDouble(),
       status: json['status'] is int 
           ? statusFromInt(json['status'] as int)

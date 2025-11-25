@@ -7,8 +7,8 @@ server:
 database:
   host: "localhost"
   port: 3306
-  user: "dog"
-  password: "123456" # Use environment variables for production passwords
+  user: "root"
+  password: "Aa123456" # Use environment variables for production passwords
   dbname: "sms_platform"
 
 # Redis Configuration
@@ -29,3 +29,12 @@ scheduler:
   code_check_interval: 5         # 验证码检查间隔 (秒)
   code_timeout: 300              # 验证码获取超时时间 (秒) - 5分钟
   assignment_cleanup_interval: 60 # 过期分配清理间隔 (秒)
+
+# Logging Configuration
+logging:
+  file: "logs/goapi.log"
+  level: "info"
+  max_size: 20       # MB
+  max_backups: 5
+  max_age: 7         # days
+  compress: true

@@ -59,7 +59,7 @@ type BusinessRule struct {
 // businessTypes: 从数据库读取的业务类型列表，如果为nil则使用默认配置
 func NewLocalProvider(id, name string, priority int, businessTypes []BusinessTypeConfig) *LocalProvider {
 	return NewLocalProviderWithConfig(id, name, priority, LocalProviderConfig{
-		SuccessRate:   95,
+		SuccessRate:   100,
 		MinDelayMs:    100,
 		MaxDelayMs:    500,
 		BusinessTypes: businessTypes,
@@ -142,7 +142,7 @@ func (lp *LocalProvider) initSupportedBusiness(businessTypes []BusinessTypeConfi
 			rule := &BusinessRule{
 				Name:        bt.BusinessName,
 				SuccessRate: 0.95, // 默认成功率
-				CostFactor:  1.0,   // 默认成本因子
+				CostFactor:  1.0,  // 默认成本因子
 				Delay:       2 * time.Second,
 				Countries:   []string{"US", "CN", "UK", "DE", "FR"},
 			}
@@ -299,79 +299,22 @@ func (lp *LocalProvider) GetPhone(ctx context.Context, businessType, cardType st
 // 因为这是一个模拟实现，实际生产环境应该从数据库或其他持久化存储中恢复状态
 // extId 参数：本地 Provider 不使用 extId，保留参数以兼容接口
 func (lp *LocalProvider) GetCode(ctx context.Context, phoneNumber string, timeout time.Duration, extId ...string) (*CodeResponse, error) {
-	// 先检查内存中是否有该手机号
-	lp.mu.RLock()
-	assignedPhone, exists := lp.phoneNumbersInUse[phoneNumber]
-	lp.mu.RUnlock()
-
-	var businessType string
-	var businessRule *BusinessRule
-
-	if exists {
-		// 检查是否过期
-		if time.Now().After(assignedPhone.ExpiresAt) {
-			lp.mu.Lock()
-			delete(lp.phoneNumbersInUse, phoneNumber)
-			lp.mu.Unlock()
-			return nil, NewProviderError("PHONE_EXPIRED", "手机号已过期")
-		}
-		businessType = assignedPhone.BusinessType
-		businessRule = lp.supportedBusiness[businessType]
-	} else {
-		// 如果手机号不在内存中，尝试从默认业务类型生成验证码
-		// 这是一个fallback机制，用于处理定时器调用时手机号不在内存中的情况
-		// 实际生产环境应该从数据库恢复状态
-		businessType = "wx" // 默认业务类型，可以根据实际情况调整
-		businessRule = lp.supportedBusiness[businessType]
-		if businessRule == nil {
-			// 如果默认业务类型也不存在，使用第一个可用的业务类型
-			for bt, rule := range lp.supportedBusiness {
-				businessType = bt
-				businessRule = rule
-				break
-			}
-		}
-		if businessRule == nil {
-			return nil, NewProviderError("INVALID_PHONE", "手机号未分配且无可用业务类型")
-		}
+	// 模拟网络延迟
+	if err := lp.simulateLatency(ctx); err != nil {
+		return nil, err
 	}
 
-	// 模拟验证码接收延迟
-	smsDelay := businessRule.Delay
-	if timeout < smsDelay {
-		smsDelay = timeout / 2 // 确保在超时前到达
+	// 模拟失败
+	if lp.simulateFailure() {
+		return nil, NewProviderError("TEMPORARY_FAILURE", "模拟的临时失败")
 	}
 
-	// 创建带超时的上下文
-	codeCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	// 等待验证码到达（模拟）
-	select {
-	case <-codeCtx.Done():
-		return nil, NewProviderError("CODE_TIMEOUT", "验证码获取超时")
-	case <-time.After(smsDelay):
-		// 生成验证码
-		code := lp.generateVerificationCode()
-
-		// 记录验证码
-		lp.mu.Lock()
-		lp.codesReceived[phoneNumber] = &ReceivedCode{
-			Code:         code,
-			PhoneNumber:  phoneNumber,
-			BusinessType: businessType,
-			ReceivedAt:   time.Now(),
-			ExpiresAt:    time.Now().Add(5 * time.Minute),
-		}
-		lp.mu.Unlock()
-
-		return &CodeResponse{
-			Code:       code,
-			Message:    fmt.Sprintf("验证码已接收 - %s", businessType),
-			ReceivedAt: time.Now(),
-			ProviderID: lp.info.ID,
-		}, nil
-	}
+	return &CodeResponse{
+		Code:       lp.generateVerificationCode(),
+		Message:    "验证码接收成功",
+		ReceivedAt: time.Now(),
+		ProviderID: lp.info.ID,
+	}, nil
 }
 
 // ReleasePhone 释放手机号
@@ -489,14 +432,14 @@ func (lp *LocalProvider) GetStats() map[string]interface{} {
 	defer lp.mu.RUnlock()
 
 	return map[string]interface{}{
-		"provider_id":          lp.info.ID,
-		"provider_name":        lp.info.Name,
-		"phones_in_use":        len(lp.phoneNumbersInUse),
-		"codes_received":       len(lp.codesReceived),
-		"success_rate":         lp.successRate,
-		"supported_business":   len(lp.supportedBusiness),
-		"supported_countries":  len(lp.countries),
-		"healthy":              lp.healthy,
+		"provider_id":         lp.info.ID,
+		"provider_name":       lp.info.Name,
+		"phones_in_use":       len(lp.phoneNumbersInUse),
+		"codes_received":      len(lp.codesReceived),
+		"success_rate":        lp.successRate,
+		"supported_business":  len(lp.supportedBusiness),
+		"supported_countries": len(lp.countries),
+		"healthy":             lp.healthy,
 	}
 }
 
@@ -511,4 +454,3 @@ func (lp *LocalProvider) GetSupportedBusiness() map[string]*BusinessRule {
 func (lp *LocalProvider) GetSupportedCards() map[string]bool {
 	return lp.supportedCards
 }
-

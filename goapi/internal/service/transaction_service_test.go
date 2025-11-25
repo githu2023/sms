@@ -72,6 +72,10 @@ func (m *MockTransactionRepository) GetBalance(ctx context.Context, customerID i
 	return args.Get(0).(float64), args.Error(1)
 }
 
+func (m *MockTransactionRepository) GetBalanceForUpdate(ctx context.Context, tx *gorm.DB, customerID int64) (float64, error) {
+	return m.GetBalance(ctx, customerID)
+}
+
 func (m *MockTransactionRepository) Update(ctx context.Context, transaction *domain.Transaction) error {
 	args := m.Called(ctx, transaction)
 	return args.Error(0)

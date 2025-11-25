@@ -79,6 +79,7 @@
   "assignmentResult": "Assignment Result",
   "verificationCode": "Verification Code",
   "waitingForCode": "Waiting for code...",
+  "noCodeReceived": "No code received",
   "retryGetCode": "Retry",
   "requestCount": "Request Count",
   "requestCountHelper": "Maximum 10 numbers per request",
@@ -99,6 +100,7 @@
   "receivedAtLabel": "Received At",
   "statusSuccess": "Success",
   "statusPending": "Pending",
+  "statusActive": "Active",
   "statusFailed": "Failed",
   "getCodeInstructions": "Enter up to 10 phone numbers. If the status is pending, continue polling this interface.",
   "currentPasswordLabel": "Current Password",
@@ -116,5 +118,26 @@
   "deleteWhitelistConfirm": "Delete the following IP?",
   "notesOptional": "Notes (optional)",
   "ipAddressRequired": "Please enter IP address or CIDR",
-  "invalidIpFormat": "Invalid IP or CIDR format"
+  "invalidIpFormat": "Invalid IP or CIDR format",
+  "viewAll": "View All",
+  "recentRecords": "Recent Records",
+  "pullDownToRefresh": "Pull down to refresh, scroll up to load more",
+  "noMoreData": "No more data",
+  "loadMore": "Load More",
+  "copy": "Copy",
+  "totalRecords": "Total {count} records",
+  "@totalRecords": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "refresh": "Refresh",
+  "loadingFailed": "Loading failed",
+  "noAvailableBusinessTypes": "No business types available, please contact administrator",
+  "getBusinessTypesFailed": "Failed to get business types",
+  "getFailed": "Failed to get",
+  "registerFailed": "Registration failed",
+  "registerSuccess": "Registration successful! Please login"
 }

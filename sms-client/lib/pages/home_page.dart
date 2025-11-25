@@ -5,10 +5,10 @@ import '../providers/auth_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/language_picker.dart';
 import '../widgets/theme_picker.dart';
+import '../widgets/assignment_card.dart';
 import '../core/api_client.dart';
 import '../models/assignment.dart';
 import 'login_page.dart';
-import 'whitelist_page.dart';
 import 'change_password_page.dart';
 import 'get_phone_page.dart';
 import 'get_code_page.dart';
@@ -69,9 +69,10 @@ class _HomePageState extends State<HomePage> {
       } else {
         debugPrint('Failed to load assignments: ${response.message}');
         if (mounted) {
+          final l10n = AppLocalizations.of(context)!;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(response.message ?? '加载失败'),
+              content: Text(response.message ?? l10n.loadingFailed),
               backgroundColor: Colors.red,
             ),
           );
@@ -80,8 +81,12 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       debugPrint('Exception loading assignments: $e');
       if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('加载失败: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('${l10n.loadingFailed}: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -297,7 +302,7 @@ class _HomePageState extends State<HomePage> {
                         _selectedIndex = 1;
                       });
                     },
-                    child: const Text('查看全部'),
+                    child: Text(l10n.viewAll),
                   ),
               ],
             ),
@@ -322,7 +327,12 @@ class _HomePageState extends State<HomePage> {
               // 显示最近3条记录
               ...(_assignments
                   .take(3)
-                  .map((assignment) => _buildAssignmentCard(assignment, l10n))),
+                  .map(
+                    (assignment) => AssignmentCard(
+                      assignment: assignment,
+                      onRefresh: _loadAssignments,
+                    ),
+                  )),
           ],
         ),
       ),
@@ -376,7 +386,7 @@ class _HomePageState extends State<HomePage> {
               child: ElevatedButton.icon(
                 onPressed: _loadAssignments,
                 icon: const Icon(Icons.refresh),
-                label: const Text('刷新'),
+                label: Text(l10n.refresh),
               ),
             ),
           ],
@@ -396,14 +406,14 @@ class _HomePageState extends State<HomePage> {
           child: Row(
             children: [
               Text(
-                '共 ${_assignments.length} 条记录',
+                l10n.totalRecords(_assignments.length),
                 style: TextStyle(color: Colors.grey[600], fontSize: 14),
               ),
               const Spacer(),
               IconButton(
                 icon: const Icon(Icons.refresh),
                 onPressed: _isLoadingAssignments ? null : _loadAssignments,
-                tooltip: '刷新',
+                tooltip: l10n.refresh,
               ),
             ],
           ),
@@ -431,214 +441,15 @@ class _HomePageState extends State<HomePage> {
                 }
 
                 final assignment = _assignments[index];
-                return _buildAssignmentCard(assignment, l10n);
+                return AssignmentCard(
+                  assignment: assignment,
+                  onRefresh: _loadAssignments,
+                );
               },
             ),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildAssignmentCard(Assignment assignment, AppLocalizations l10n) {
-    // 判断是否需要显示"获取验证码"按钮
-    // 条件：没有验证码 且 状态是 pending 或 active（等待中或激活中）
-    final bool canFetchCode =
-        assignment.code == null &&
-        (assignment.status == 'pending' || assignment.status == 'active');
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.phone_android,
-                  color: Theme.of(context).primaryColor,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    assignment.phone,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-                _buildStatusChip(assignment.status, l10n),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text('${l10n.businessType}: ${assignment.businessType}'),
-            const SizedBox(height: 4),
-            Text(
-              '${l10n.code}: ${_getCodeDisplay(assignment)}',
-              style: TextStyle(
-                color: _getCodeColor(assignment),
-                fontWeight:
-                    assignment.code == null
-                        ? FontWeight.bold
-                        : FontWeight.normal,
-                fontSize: assignment.code == null ? 16 : 14,
-              ),
-            ),
-            if (canFetchCode) ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => _fetchCodeForPhone(assignment.phone),
-                  icon: const Icon(Icons.sms, size: 18),
-                  label: const Text('获取验证码'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 4),
-            Text('${l10n.cost}: ¥${assignment.cost.toStringAsFixed(4)}'),
-            const SizedBox(height: 4),
-            Text(
-              '${l10n.time}: ${DateFormat('yyyy-MM-dd HH:mm').format(assignment.createdAt)}',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _fetchCodeForPhone(String phoneNumber) async {
-    try {
-      final response = await _apiClient.getVerificationCodes(
-        phoneNumbers: [phoneNumber],
-      );
-
-      if (response.success && response.data != null) {
-        final result = response.data!;
-
-        if (result.codes.isNotEmpty) {
-          final codeEntry = result.codes.first;
-
-          if (codeEntry.status == 'success') {
-            // 成功获取验证码
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('验证码: ${codeEntry.code}'),
-                  backgroundColor: Colors.green,
-                  duration: const Duration(seconds: 5),
-                ),
-              );
-              // 刷新列表
-              _loadAssignments();
-            }
-          } else if (codeEntry.status == 'pending') {
-            // 还在等待中
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('验证码还未收到，请稍后再试'),
-                  backgroundColor: Colors.orange,
-                ),
-              );
-            }
-          } else {
-            // 失败
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(codeEntry.message),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          }
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(response.message ?? '请求失败'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('网络错误: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  String _getCodeDisplay(Assignment assignment) {
-    if (assignment.code != null) {
-      return assignment.code!;
-    }
-
-    // 根据状态返回不同的提示
-    switch (assignment.status) {
-      case 'pending':
-      case 'active':
-        return '等待验证码中...';
-      case 'completed':
-        return '未收到验证码';
-      case 'expired':
-        return '已过期';
-      default:
-        return '--';
-    }
-  }
-
-  Color _getCodeColor(Assignment assignment) {
-    if (assignment.code != null) {
-      return Colors.black;
-    }
-
-    switch (assignment.status) {
-      case 'pending':
-      case 'active':
-        return Colors.orange; // 等待中 - 橙色
-      case 'completed':
-        return Colors.grey; // 已完成但没验证码 - 灰色
-      case 'expired':
-        return Colors.red; // 已过期 - 红色
-      default:
-        return Colors.grey;
-    }
-  }
-
-  Widget _buildStatusChip(String status, AppLocalizations l10n) {
-    Color color;
-    String label;
-    switch (status) {
-      case 'completed':
-        color = Colors.green;
-        label = l10n.completed;
-        break;
-      case 'expired':
-        color = Colors.red;
-        label = l10n.expired;
-        break;
-      default:
-        color = Colors.orange;
-        label = status;
-    }
-
-    return Chip(
-      label: Text(label, style: const TextStyle(fontSize: 12)),
-      backgroundColor: color.withValues(alpha: 0.2),
-      labelStyle: TextStyle(color: color),
     );
   }
 
@@ -694,15 +505,6 @@ class _HomePageState extends State<HomePage> {
               context: context,
               builder: (context) => const ThemePicker(),
             );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.shield),
-          title: Text(l10n.whitelist),
-          onTap: () {
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const WhitelistPage()));
           },
         ),
         ListTile(

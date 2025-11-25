@@ -4,8 +4,10 @@ import 'package:intl/intl.dart';
 import '../core/api_client.dart';
 import '../l10n/app_localizations.dart';
 import '../models/assigned_phone.dart';
+import '../models/assignment.dart';
 import '../models/business_type.dart';
 import '../models/phone_assignment_result.dart';
+import '../widgets/assignment_card.dart';
 
 class GetPhonePage extends StatefulWidget {
   const GetPhonePage({super.key});
@@ -16,20 +18,42 @@ class GetPhonePage extends StatefulWidget {
 
 class _GetPhonePageState extends State<GetPhonePage> {
   final ApiClient _apiClient = ApiClient();
+  final ScrollController _scrollController = ScrollController();
 
   List<BusinessType> _businessTypes = [];
   BusinessType? _selectedBusinessType;
   String _selectedCardType = 'physical';
   int _requestedCount = 1;
-  List<PhoneAssignmentResult> _assignmentResults = []; // 改为列表，保存所有分配结果
+  List<PhoneAssignmentResult> _assignmentResults = []; // 页面内的分配结果
+  List<Assignment> _recentAssignments = []; // 最近的历史记录
   bool _isLoading = false;
   bool _isLoadingTypes = false;
+  bool _isLoadingHistory = false;
+  bool _hasMoreHistory = true;
+  int _historyPage = 1;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     _loadBusinessTypes();
+    _loadRecentAssignments(); // 加载最近的历史记录
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      if (!_isLoadingHistory && _hasMoreHistory) {
+        _loadMoreHistory();
+      }
+    }
   }
 
   Future<void> _loadBusinessTypes() async {
@@ -47,12 +71,17 @@ class _GetPhonePageState extends State<GetPhonePage> {
             _selectedBusinessType = _businessTypes.first;
           } else {
             // 数据为空时的友好提示
-            _error = '暂无可用的业务类型，请联系管理员配置';
+            _error = context.mounted 
+                ? AppLocalizations.of(context)!.noAvailableBusinessTypes
+                : 'No business types available';
           }
         });
       } else {
         setState(() {
-          _error = response.message ?? '获取业务类型失败';
+          _error = response.message ?? 
+              (context.mounted 
+                  ? AppLocalizations.of(context)!.getBusinessTypesFailed
+                  : 'Failed to get business types');
         });
       }
     } catch (e) {
@@ -64,6 +93,42 @@ class _GetPhonePageState extends State<GetPhonePage> {
         _isLoadingTypes = false;
       });
     }
+  }
+
+  Future<void> _loadRecentAssignments({bool loadMore = false}) async {
+    if (_isLoadingHistory) return;
+
+    setState(() {
+      _isLoadingHistory = true;
+    });
+
+    try {
+      final page = loadMore ? _historyPage + 1 : 1;
+      final response = await _apiClient.getAssignments(page: page, limit: 10);
+
+      if (response.success && response.data != null) {
+        setState(() {
+          if (loadMore) {
+            _recentAssignments.addAll(response.data!);
+            _historyPage = page;
+          } else {
+            _recentAssignments = response.data!;
+            _historyPage = 1;
+          }
+          _hasMoreHistory = response.data!.length >= 10;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load recent assignments: $e');
+    } finally {
+      setState(() {
+        _isLoadingHistory = false;
+      });
+    }
+  }
+
+  Future<void> _loadMoreHistory() async {
+    await _loadRecentAssignments(loadMore: true);
   }
 
   Future<void> _assignPhone() async {
@@ -178,11 +243,17 @@ class _GetPhonePageState extends State<GetPhonePage> {
                   ],
                 ),
               )
-              : SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
+              : RefreshIndicator(
+                onRefresh: () async {
+                  await _loadRecentAssignments();
+                },
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(16),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                     // Business Type Selection
                     Card(
                       child: Padding(
@@ -389,11 +460,51 @@ class _GetPhonePageState extends State<GetPhonePage> {
                           const SizedBox(height: 16),
                         ],
                       ))),
+
+                    // 最近的历史记录
+                    if (_recentAssignments.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      Text(
+                        l10n.recentRecords,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        l10n.pullDownToRefresh,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ...(_recentAssignments.map((assignment) =>
+                          AssignmentCard(
+                            assignment: assignment,
+                            onRefresh: _loadRecentAssignments,
+                          ))),
+                      if (_isLoadingHistory)
+                        const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                      if (!_hasMoreHistory && _recentAssignments.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Center(
+                            child: Text(
+                              l10n.noMoreData,
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),
+            ),
     );
   }
+
 
   Widget _buildSummaryCard(
     BuildContext context,
@@ -473,66 +584,212 @@ class _GetPhonePageState extends State<GetPhonePage> {
     AssignedPhone phone,
     AppLocalizations l10n,
   ) {
+    // 查找该手机号的验证码（从历史记录中）
+    String? verificationCode;
+    for (var assignment in _recentAssignments) {
+      if (assignment.phone == phone.phoneNumber && 
+          assignment.code != null && 
+          assignment.code!.isNotEmpty) {
+        verificationCode = assignment.code;
+        break;
+      }
+    }
+
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      elevation: 3,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 手机号和复制按钮
             Row(
               children: [
+                Icon(
+                  Icons.phone_android,
+                  color: Theme.of(context).primaryColor,
+                  size: 28,
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     phone.phoneNumber,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 1.5,
+                      fontSize: 20,
+                      letterSpacing: 1.2,
                     ),
                   ),
                 ),
                 IconButton.filled(
                   onPressed: () => _copyPhone(phone.phoneNumber),
-                  icon: const Icon(Icons.copy),
+                  icon: const Icon(Icons.copy, size: 20),
                   tooltip: l10n.copyPhone,
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
+            const SizedBox(height: 16),
+            
+            // 信息网格
+            Row(
               children: [
-                _buildInfoChip(l10n.countryCode, phone.countryCode),
-                _buildInfoChip(l10n.providerLabel, phone.providerId),
-                _buildInfoChip(
-                  l10n.validUntilLabel,
-                  _formatDate(phone.validUntil),
+                Expanded(
+                  child: _buildInfoItem(
+                    Icons.public,
+                    l10n.countryCode,
+                    phone.countryCode,
+                  ),
                 ),
-                _buildInfoChip(l10n.cost, _formatAmount(phone.cost)),
+                Expanded(
+                  child: _buildInfoItem(
+                    Icons.store,
+                    l10n.providerLabel,
+                    phone.providerId,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
-            // 获取验证码按钮
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _fetchCodeForPhone(phone.phoneNumber),
-                icon: const Icon(Icons.sms, size: 18),
-                label: const Text('获取验证码'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
+            Row(
+              children: [
+                Expanded(
+                  child: _buildInfoItem(
+                    Icons.schedule,
+                    l10n.validUntilLabel,
+                    _formatDate(phone.validUntil),
+                  ),
+                ),
+                Expanded(
+                  child: _buildInfoItem(
+                    Icons.attach_money,
+                    l10n.cost,
+                    _formatAmount(phone.cost),
+                  ),
+                ),
+              ],
+            ),
+            
+            // 验证码显示或获取按钮
+            if (verificationCode != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green, width: 2),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.verified, color: Colors.green, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            l10n.code,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            verificationCode,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                              letterSpacing: 2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton.filled(
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: verificationCode!));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(l10n.copied),
+                            duration: const Duration(seconds: 1),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
+            ] else ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _fetchCodeForNewPhone(phone.phoneNumber),
+                  icon: const Icon(Icons.sms, size: 20),
+                  label: Text(
+                    l10n.getCode,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Future<void> _fetchCodeForPhone(String phoneNumber) async {
+  Widget _buildInfoItem(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: Colors.grey[600]),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[600],
+                ),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _fetchCodeForNewPhone(String phoneNumber) async {
+    final l10n = AppLocalizations.of(context)!;
+    
     try {
       final response = await _apiClient.getVerificationCodes(
         phoneNumbers: [phoneNumber],
@@ -548,11 +805,11 @@ class _GetPhonePageState extends State<GetPhonePage> {
             if (codeEntry.status == 'success') {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('验证码: ${codeEntry.code}'),
+                  content: Text('${l10n.code}: ${codeEntry.code}'),
                   backgroundColor: Colors.green,
                   duration: const Duration(seconds: 5),
                   action: SnackBarAction(
-                    label: '复制',
+                    label: l10n.copy,
                     textColor: Colors.white,
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: codeEntry.code));
@@ -560,10 +817,12 @@ class _GetPhonePageState extends State<GetPhonePage> {
                   ),
                 ),
               );
+              // 刷新历史记录
+              _loadRecentAssignments();
             } else if (codeEntry.status == 'pending') {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('验证码还未收到，请稍后再试'),
+                SnackBar(
+                  content: Text(l10n.waitingForCode),
                   backgroundColor: Colors.orange,
                 ),
               );
@@ -581,7 +840,7 @@ class _GetPhonePageState extends State<GetPhonePage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(response.message ?? '获取失败'),
+              content: Text(response.message ?? l10n.getFailed),
               backgroundColor: Colors.red,
             ),
           );
@@ -597,26 +856,6 @@ class _GetPhonePageState extends State<GetPhonePage> {
         );
       }
     }
-  }
-
-  Widget _buildInfoChip(String label, String value) {
-    return Chip(
-      label: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, color: Colors.black54),
-          ),
-          Text(
-            value.isEmpty ? '--' : value,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-    );
   }
 
   String _formatAmount(double value) => value.toStringAsFixed(4);

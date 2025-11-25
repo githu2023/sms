@@ -19,7 +19,7 @@ func main() {
 	}
 
 	// 2. Initialize Global Logger
-	err = global.InitLogger(cfg.Server.Mode)
+	err = global.InitLogger(cfg.Server.Mode, cfg.Logging)
 	if err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}

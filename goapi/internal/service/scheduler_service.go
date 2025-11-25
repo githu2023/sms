@@ -192,8 +192,8 @@ func (s *SchedulerService) markAssignmentAsExpired(ctx context.Context, assignme
 		customerID := *assignment.CustomerID
 		refundAmount := *assignment.MerchantFee
 
-		// 获取当前余额
-		currentBalance, err := s.transactionRepo.GetBalance(ctx, customerID)
+		// 获取当前余额（加锁）
+		currentBalance, err := s.transactionRepo.GetBalanceForUpdate(ctx, tx, customerID)
 		if err != nil {
 			tx.Rollback()
 			zap.S().Errorf("Error getting balance for customer %d: %v", customerID, err)
@@ -227,16 +227,10 @@ func (s *SchedulerService) markAssignmentAsExpired(ctx context.Context, assignme
 			return
 		}
 
-		// 更新客户余额
-		customer, err := s.customerRepo.FindByID(ctx, customerID)
-		if err != nil {
-			tx.Rollback()
-			zap.S().Errorf("Error finding customer %d: %v", customerID, err)
-			return
-		}
-		customer.Balance = currentBalance + refundAmount
-		err = s.customerRepo.Update(ctx, customer)
-		if err != nil {
+		newBalance := currentBalance + refundAmount
+		if err := tx.WithContext(ctx).Model(&domain.Customer{}).
+			Where("id = ?", customerID).
+			Update("balance", newBalance).Error; err != nil {
 			tx.Rollback()
 			zap.S().Errorf("Error updating customer balance for customer %d: %v", customerID, err)
 			return

@@ -246,6 +246,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get waitingForCode => '等待验证码中...';
 
   @override
+  String get noCodeReceived => '未收到验证码';
+
+  @override
   String get retryGetCode => '重试获取';
 
   @override
@@ -306,6 +309,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get statusPending => '等待';
 
   @override
+  String get statusActive => '激活中';
+
+  @override
   String get statusFailed => '失败';
 
   @override
@@ -358,4 +364,48 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get invalidIpFormat => 'IP地址或CIDR格式不正确';
+
+  @override
+  String get viewAll => '查看全部';
+
+  @override
+  String get recentRecords => '最近记录';
+
+  @override
+  String get pullDownToRefresh => '下拉刷新，上滑加载更多';
+
+  @override
+  String get noMoreData => '没有更多了';
+
+  @override
+  String get loadMore => '加载更多';
+
+  @override
+  String get copy => '复制';
+
+  @override
+  String totalRecords(int count) {
+    return '共 $count 条记录';
+  }
+
+  @override
+  String get refresh => '刷新';
+
+  @override
+  String get loadingFailed => '加载失败';
+
+  @override
+  String get noAvailableBusinessTypes => '暂无可用的业务类型，请联系管理员配置';
+
+  @override
+  String get getBusinessTypesFailed => '获取业务类型失败';
+
+  @override
+  String get getFailed => '获取失败';
+
+  @override
+  String get registerFailed => '注册失败';
+
+  @override
+  String get registerSuccess => '注册成功！请登录';
 }

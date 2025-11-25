@@ -373,10 +373,6 @@ class _GetCodePageState extends State<GetCodePage> {
               '${l10n.messageLabel}: ${entry.message.isEmpty ? '--' : entry.message}',
             ),
             const SizedBox(height: 4),
-            Text(
-              '${l10n.providerLabel}: ${entry.providerId.isEmpty ? '--' : entry.providerId}',
-            ),
-            const SizedBox(height: 4),
             Text('${l10n.receivedAtLabel}: ${_formatDate(entry.receivedAt)}'),
           ],
         ),

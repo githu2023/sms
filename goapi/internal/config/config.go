@@ -11,6 +11,7 @@ type Config struct {
 	Redis     RedisConfig     `mapstructure:"redis"`
 	JWT       JWTConfig       `mapstructure:"jwt"`
 	Scheduler SchedulerConfig `mapstructure:"scheduler"`
+	Logging   LoggingConfig   `mapstructure:"logging"`
 }
 
 // JWTConfig holds JWT specific configuration.
@@ -48,6 +49,16 @@ type SchedulerConfig struct {
 	CodeCheckInterval         int `mapstructure:"code_check_interval"`         // 验证码检查间隔 (秒)
 	CodeTimeout               int `mapstructure:"code_timeout"`                // 验证码获取超时时间 (秒)
 	AssignmentCleanupInterval int `mapstructure:"assignment_cleanup_interval"` // 过期分配清理间隔 (秒)
+}
+
+// LoggingConfig holds logging related configuration
+type LoggingConfig struct {
+	FilePath   string `mapstructure:"file"`
+	Level      string `mapstructure:"level"`
+	MaxSize    int    `mapstructure:"max_size"`    // megabytes
+	MaxBackups int    `mapstructure:"max_backups"` // number of files
+	MaxAge     int    `mapstructure:"max_age"`     // days
+	Compress   bool   `mapstructure:"compress"`
 }
 
 // LoadConfig reads configuration from file or environment variables.

@@ -125,7 +125,7 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 		zap.String("business_type", businessType),
 		zap.String("provider_code", *selectedMapping.ProviderCode),
 		zap.String("business_code", *selectedMapping.BusinessCode))
-	
+
 	providerInstance, err := providerManager.GetProviderByCode(*selectedMapping.ProviderCode)
 	if err != nil {
 		errorMsg := fmt.Sprintf("服务商未找到: code=%s, 错误=%v", *selectedMapping.ProviderCode, err)
@@ -137,7 +137,7 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 		s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone", errorMsg)
 		return nil, common.CodeProviderNotFound
 	}
-	
+
 	providerInfo := providerInstance.GetProviderInfo()
 	global.LogInfo("运营商获取成功",
 		zap.Int64("customer_id", customerID),
@@ -194,7 +194,29 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 		}
 	}()
 
+	lockedBalance, err := s.transactionRepo.GetBalanceForUpdate(ctx, tx, customerID)
+	if err != nil {
+		tx.Rollback()
+		s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
+			fmt.Sprintf("Balance lock error: %v", err))
+		return nil, common.CodeInternalError
+	}
+	balance = lockedBalance
+	if balance < totalCost {
+		tx.Rollback()
+		s.apiLogger.LogInsufficientBalance(ctx, customerID, "/api/phone/get_phone",
+			fmt.Sprintf("Insufficient balance after lock: %.2f < %.2f", balance, totalCost))
+		return nil, common.CodeInsufficientBalance
+	}
+
 	for i := 0; i < count; i++ {
+		if balance < costPerPhone {
+			tx.Rollback()
+			s.apiLogger.LogInsufficientBalance(ctx, customerID, "/api/phone/get_phone",
+				fmt.Sprintf("Insufficient balance during allocation: %.2f < %.2f", balance, costPerPhone))
+			return nil, common.CodeInsufficientBalance
+		}
+
 		// 调用运营商接口获取手机号
 		global.LogInfo("调用运营商接口获取手机号",
 			zap.Int64("customer_id", customerID),
@@ -204,7 +226,7 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 			zap.String("card_type", cardType),
 			zap.Int("attempt", i+1),
 			zap.Int("total_count", count))
-		
+
 		phoneResponse, err := providerInstance.GetPhone(ctx, *selectedMapping.BusinessCode, cardType)
 		if err != nil {
 			failedCount++
@@ -223,7 +245,7 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 			// 继续尝试下一个，不立即返回错误
 			continue
 		}
-		
+
 		global.LogInfo("运营商接口调用成功",
 			zap.Int64("customer_id", customerID),
 			zap.String("provider_code", *selectedMapping.ProviderCode),

@@ -1,1 +1,7 @@
 ui/*
+.DS_Store
+sms-client/temp_flutter_project/
+sms-client/web/*
+sms-client/nginx_flutter.conf
+sms-client/web/index.html
+goapi/logs

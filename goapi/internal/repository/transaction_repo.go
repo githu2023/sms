@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // TransactionRepository defines the interface for transaction data operations
@@ -16,6 +17,7 @@ type TransactionRepository interface {
 	FindByCustomerIDAndType(ctx context.Context, customerID int64, transactionType int, limit, offset int) ([]*domain.Transaction, int64, error)
 	FindByDateRange(ctx context.Context, customerID int64, startDate, endDate time.Time, limit, offset int) ([]*domain.Transaction, int64, error)
 	GetBalance(ctx context.Context, customerID int64) (float64, error)
+	GetBalanceForUpdate(ctx context.Context, tx *gorm.DB, customerID int64) (float64, error)
 	Update(ctx context.Context, transaction *domain.Transaction) error
 	BeginTx(ctx context.Context) (*gorm.DB, error)
 }
@@ -127,6 +129,23 @@ func (r *transactionRepository) GetBalance(ctx context.Context, customerID int64
 		return 0, err
 	}
 
+	return customer.Balance, nil
+}
+
+// GetBalanceForUpdate locks the customer row and returns current balance
+func (r *transactionRepository) GetBalanceForUpdate(ctx context.Context, tx *gorm.DB, customerID int64) (float64, error) {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	var customer domain.Customer
+	if err := db.WithContext(ctx).
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("id = ?", customerID).
+		First(&customer).Error; err != nil {
+		return 0, err
+	}
 	return customer.Balance, nil
 }
 
