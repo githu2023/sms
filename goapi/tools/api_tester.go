@@ -231,11 +231,22 @@ func testGetBalance(apiPrefix, token, apiType string) error {
 	return nil
 }
 
+var lastPhoneNumber string // 保存最后获取的手机号，用于后续测试
+
 func testGetPhone(apiPrefix, token, apiType string) error {
 	fmt.Printf("\n[5] 测试%s获取手机号...\n", apiType)
 	headers := map[string]string{"Authorization": "Bearer " + token}
+	
+	// 先获取可用的业务类型
+	fmt.Println("   获取业务类型列表...")
+	businessResp, err := makeRequest("GET", BaseURL+apiPrefix+"/business_types", headers, nil)
+	if err == nil && businessResp.Code == 200 {
+		fmt.Printf("   ✅ 业务类型获取成功\n")
+	}
+	
+	// 使用wx业务类型（根据实际配置）
 	phoneData := GetPhoneRequest{
-		BusinessType: "wx",
+		BusinessType: "wx", // 使用wx业务类型
 		CardType:     "physical",
 		Count:        1,
 	}
@@ -246,23 +257,54 @@ func testGetPhone(apiPrefix, token, apiType string) error {
 	}
 
 	if resp.Code != 200 {
+		// 输出详细错误信息
+		fmt.Printf("   ⚠️  响应码: %d, 消息: %s\n", resp.Code, resp.Message)
+		if resp.Data != nil {
+			dataBytes, _ := json.Marshal(resp.Data)
+			fmt.Printf("   响应数据: %s\n", string(dataBytes))
+		}
 		return fmt.Errorf("%s获取手机号失败: code=%d, message=%s", apiType, resp.Code, resp.Message)
 	}
 
-	// 解析响应
+	// 解析响应 - 根据实际API响应结构
 	dataBytes, _ := json.Marshal(resp.Data)
 	var phoneDataResp struct {
-		Phones []PhoneResponse `json:"phones"`
+		Phones            []PhoneResponse `json:"phones"`
+		TotalCost         float64         `json:"total_cost"`
+		RemainingBalance  float64         `json:"remaining_balance"`
+		SuccessCount      int             `json:"success_count"`
+		FailedCount       int             `json:"failed_count"`
 	}
-	if err := json.Unmarshal(dataBytes, &phoneDataResp); err == nil && len(phoneDataResp.Phones) > 0 {
+	
+	if err := json.Unmarshal(dataBytes, &phoneDataResp); err != nil {
+		// 尝试另一种格式
+		var phones []PhoneResponse
+		if err2 := json.Unmarshal(dataBytes, &phones); err2 == nil && len(phones) > 0 {
+			phone := phones[0]
+			lastPhoneNumber = phone.PhoneNumber
+			fmt.Printf("✅ %s获取手机号成功: %s, 成本: %.2f\n",
+				apiType, phone.PhoneNumber, phone.Cost)
+			return nil
+		}
+		return fmt.Errorf("解析响应失败: %v, 原始数据: %s", err, string(dataBytes))
+	}
+
+	if len(phoneDataResp.Phones) > 0 {
 		phone := phoneDataResp.Phones[0]
-		fmt.Printf("✅ %s获取手机号成功: %s, 成本: %.2f, 余额: %.2f\n",
-			apiType, phone.PhoneNumber, phone.Cost, phone.Balance)
+		lastPhoneNumber = phone.PhoneNumber
+		fmt.Printf("✅ %s获取手机号成功:\n", apiType)
+		fmt.Printf("   手机号: %s\n", phone.PhoneNumber)
+		fmt.Printf("   成本: %.2f\n", phone.Cost)
+		if phoneDataResp.RemainingBalance > 0 {
+			fmt.Printf("   剩余余额: %.2f\n", phoneDataResp.RemainingBalance)
+		}
+		fmt.Printf("   成功数: %d, 失败数: %d\n", phoneDataResp.SuccessCount, phoneDataResp.FailedCount)
+		fmt.Printf("\n💡 提示: 可以使用以下命令测试获取验证码:\n")
+		fmt.Printf("   go run api_tester.go code %s\n", phone.PhoneNumber)
 		return nil
 	}
 
-	fmt.Printf("✅ %s获取手机号成功\n", apiType)
-	return nil
+	return fmt.Errorf("响应中没有手机号数据")
 }
 
 func testGetCode(apiPrefix, token, apiType string, phoneNumbers []string) error {
@@ -360,26 +402,41 @@ func main() {
 				fmt.Printf("❌ %v\n", err)
 				return
 			}
-			if err := testGetAPIToken(); err != nil {
-				fmt.Printf("❌ %v\n", err)
-				return
-			}
-			if apiToken != "" {
+			// 优先使用客户端API，如果API Token获取失败
+			if clientToken != "" {
+				testGetPhone(ClientAPIPrefix, clientToken, "客户端")
+			} else if apiToken != "" {
 				testGetPhone(APIPrefix, apiToken, "编程API")
+			} else {
+				fmt.Println("❌ 没有可用的Token")
 			}
 			return
 		case "code":
 			// 只测试获取验证码（需要先有手机号）
-			if len(os.Args) < 3 {
-				fmt.Println("用法: go run api_tester.go code <phone_number>")
+			var phoneNumber string
+			if len(os.Args) >= 3 {
+				phoneNumber = os.Args[2]
+			} else if lastPhoneNumber != "" {
+				phoneNumber = lastPhoneNumber
+				fmt.Printf("使用上次获取的手机号: %s\n", phoneNumber)
+			} else {
+				fmt.Println("用法: go run api_tester.go code [phone_number]")
+				fmt.Println("或者先运行: go run api_tester.go phone")
 				return
 			}
-			if err := testGetAPIToken(); err != nil {
+			
+			if err := testUserLogin(); err != nil {
 				fmt.Printf("❌ %v\n", err)
 				return
 			}
-			if apiToken != "" {
-				testGetCode(APIPrefix, apiToken, "编程API", []string{os.Args[2]})
+			
+			// 优先使用客户端API
+			if clientToken != "" {
+				testGetCode(ClientAPIPrefix, clientToken, "客户端", []string{phoneNumber})
+			} else if apiToken != "" {
+				testGetCode(APIPrefix, apiToken, "编程API", []string{phoneNumber})
+			} else {
+				fmt.Println("❌ 没有可用的Token")
 			}
 			return
 		case "refund":

@@ -375,7 +375,8 @@ func (lp *LocalProvider) GetCode(ctx context.Context, phoneNumber string, timeou
 }
 
 // ReleasePhone 释放手机号
-func (lp *LocalProvider) ReleasePhone(ctx context.Context, phoneNumber string) error {
+// extId 参数：本地Provider不需要extId，但为了接口一致性保留此参数
+func (lp *LocalProvider) ReleasePhone(ctx context.Context, phoneNumber string, extId ...string) error {
 	lp.mu.Lock()
 	defer lp.mu.Unlock()
 

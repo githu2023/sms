@@ -30,7 +30,9 @@ type SMSProvider interface {
 	SetHealthy(healthy bool)
 
 	// release phone number
-	ReleasePhone(ctx context.Context, phoneNumber string) error
+	// phoneNumber: the phone number to release
+	// extId: optional external ID from provider, if provided, will be used instead of phoneNumber lookup
+	ReleasePhone(ctx context.Context, phoneNumber string, extId ...string) error
 }
 
 // PhoneResponse represents the response from GetPhone request

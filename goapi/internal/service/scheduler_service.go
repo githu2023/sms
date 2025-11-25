@@ -398,18 +398,29 @@ func (s *SchedulerService) releasePhoneNumber(ctx context.Context, assignment *d
 	}
 
 	// 调用ReleasePhone释放手机号
-	// 如果数据库中有 extId，优先使用 extId（对于 BigBus666 等需要 extId 的运营商）
+	// 如果数据库中有 extId，优先使用 extId（对于 BigBus666、MQTT 等需要 extId 的运营商）
 	releaseCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	// ReleasePhone 接口只接收 phoneNumber，但内部会查找 extId
-	// 如果 extId 在数据库中，Provider 应该能够从数据库中恢复映射关系
-	// 或者我们需要修改 ReleasePhone 接口支持 extId 参数
-	// 目前先使用 phoneNumber，Provider 内部会处理
-	if err := providerInstance.ReleasePhone(releaseCtx, *assignment.PhoneNumber); err != nil {
-		log.Printf("Error releasing phone %s for assignment %d: %v", *assignment.PhoneNumber, assignment.ID, err)
+	// 如果数据库中有 extId，传递给 ReleasePhone
+	var extId *string
+	if assignment.ExtId != nil && *assignment.ExtId != "" {
+		extId = assignment.ExtId
+	}
+
+	if extId != nil {
+		if err := providerInstance.ReleasePhone(releaseCtx, *assignment.PhoneNumber, *extId); err != nil {
+			log.Printf("Error releasing phone %s (extId: %s) for assignment %d: %v", *assignment.PhoneNumber, *extId, assignment.ID, err)
+		} else {
+			log.Printf("Successfully released phone %s (extId: %s) for assignment %d", *assignment.PhoneNumber, *extId, assignment.ID)
+		}
 	} else {
-		log.Printf("Successfully released phone %s for assignment %d", *assignment.PhoneNumber, assignment.ID)
+		// 如果没有 extId，尝试使用 phoneNumber（某些 provider 可能支持）
+		if err := providerInstance.ReleasePhone(releaseCtx, *assignment.PhoneNumber); err != nil {
+			log.Printf("Error releasing phone %s (no extId) for assignment %d: %v", *assignment.PhoneNumber, assignment.ID, err)
+		} else {
+			log.Printf("Successfully released phone %s (no extId) for assignment %d", *assignment.PhoneNumber, assignment.ID)
+		}
 	}
 }
 

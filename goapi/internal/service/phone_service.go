@@ -120,6 +120,12 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 
 	// 4. 根据子业务类型，找到对应的运营商对象
 	providerManager := global.GetProviderManager()
+	global.LogInfo("查找运营商",
+		zap.Int64("customer_id", customerID),
+		zap.String("business_type", businessType),
+		zap.String("provider_code", *selectedMapping.ProviderCode),
+		zap.String("business_code", *selectedMapping.BusinessCode))
+	
 	providerInstance, err := providerManager.GetProviderByCode(*selectedMapping.ProviderCode)
 	if err != nil {
 		errorMsg := fmt.Sprintf("服务商未找到: code=%s, 错误=%v", *selectedMapping.ProviderCode, err)
@@ -131,6 +137,14 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 		s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone", errorMsg)
 		return nil, common.CodeProviderNotFound
 	}
+	
+	providerInfo := providerInstance.GetProviderInfo()
+	global.LogInfo("运营商获取成功",
+		zap.Int64("customer_id", customerID),
+		zap.String("provider_code", *selectedMapping.ProviderCode),
+		zap.String("provider_id", providerInfo.ID),
+		zap.String("provider_name", providerInfo.Name),
+		zap.String("provider_type", providerInfo.Type))
 
 	// 5. 查询运营商业务类型，获取价格
 	providerBusinessType, err := s.providerBusinessTypeRepo.FindByProviderCodeAndBusinessCode(
@@ -182,22 +196,40 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 
 	for i := 0; i < count; i++ {
 		// 调用运营商接口获取手机号
+		global.LogInfo("调用运营商接口获取手机号",
+			zap.Int64("customer_id", customerID),
+			zap.String("provider_code", *selectedMapping.ProviderCode),
+			zap.String("provider_id", providerInfo.ID),
+			zap.String("business_code", *selectedMapping.BusinessCode),
+			zap.String("card_type", cardType),
+			zap.Int("attempt", i+1),
+			zap.Int("total_count", count))
+		
 		phoneResponse, err := providerInstance.GetPhone(ctx, *selectedMapping.BusinessCode, cardType)
 		if err != nil {
 			failedCount++
 			errorMsg := fmt.Sprintf("服务商获取手机号失败: provider=%s, business_code=%s, card_type=%s, 错误=%v",
 				*selectedMapping.ProviderCode, *selectedMapping.BusinessCode, cardType, err)
-			global.LogWarn("服务商获取手机号失败",
+			global.LogError("服务商获取手机号失败",
 				zap.Int64("customer_id", customerID),
 				zap.String("provider_code", *selectedMapping.ProviderCode),
+				zap.String("provider_id", providerInfo.ID),
 				zap.String("business_code", *selectedMapping.BusinessCode),
 				zap.String("card_type", cardType),
 				zap.Int("attempt", i+1),
+				zap.String("error_type", fmt.Sprintf("%T", err)),
 				zap.Error(err))
 			s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone", errorMsg)
 			// 继续尝试下一个，不立即返回错误
 			continue
 		}
+		
+		global.LogInfo("运营商接口调用成功",
+			zap.Int64("customer_id", customerID),
+			zap.String("provider_code", *selectedMapping.ProviderCode),
+			zap.String("phone_number", phoneResponse.PhoneNumber),
+			zap.String("ext_id", phoneResponse.ExtId),
+			zap.Float64("cost", phoneResponse.Cost))
 
 		// 8. 如果获取到手机号成功，记录到数据库
 		providerCost := phoneResponse.Cost

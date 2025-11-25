@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -45,18 +46,30 @@ func InitProviderManager(db *gorm.DB, providerRepo ProviderRepository, providerB
 	ctx := context.Background()
 	providers, err := providerRepo.FindAll(ctx)
 	if err != nil {
+		zap.S().Errorf("Failed to load providers from database: %v", err)
 		return fmt.Errorf("failed to load providers from database: %w", err)
 	}
 
+	zap.S().Infof("Loading providers from database, total: %d", len(providers))
+
 	// 注册每个运营商
+	registeredCount := 0
 	for _, p := range providers {
 		// 允许 is_enabled 为 NULL 时也注册，或者 is_enabled 为 true
 		if p.Code != nil && (p.IsEnabled == nil || *p.IsEnabled) {
+			providerCode := *p.Code
+			zap.S().Infof("Processing provider: code=%s, name=%s, api_gateway=%s, is_enabled=%v",
+				providerCode,
+				getStringValue(p.Name, "Unknown"),
+				getStringValue(p.APIGateway, "N/A"),
+				p.IsEnabled != nil && *p.IsEnabled)
 			// 从数据库读取该运营商支持的业务类型
-			businessTypes, err := providerBusinessTypeRepo.FindByProviderCode(ctx, *p.Code)
+			businessTypes, err := providerBusinessTypeRepo.FindByProviderCode(ctx, providerCode)
 			if err != nil {
 				// 如果查询失败，记录日志但继续使用默认配置
-				fmt.Printf("Warning: failed to load business types for provider %s: %v\n", *p.Code, err)
+				zap.S().Warnf("Failed to load business types for provider %s: %v", providerCode, err)
+			} else {
+				zap.S().Infof("Loaded %d business types for provider %s", len(businessTypes), providerCode)
 			}
 
 			// 转换为 provider.BusinessTypeConfig
@@ -82,9 +95,73 @@ func InitProviderManager(db *gorm.DB, providerRepo ProviderRepository, providerB
 			// 根据运营商类型创建对应的provider实例
 			var providerInstance provider.SMSProvider
 
-			// 判断运营商类型：如果 Code 是 "bigbus666" 或包含 "bigbus"，则使用 BigBus666Provider
-			providerCode := *p.Code
-			if providerCode == "bigbus666" || contains(providerCode, "bigbus") {
+			// 判断是否为 MQTT Provider（根据 API 网关地址或 code 判断）
+			isMQTTProvider := false
+			if p.APIGateway != nil {
+				apiGateway := *p.APIGateway
+				// 如果 API 网关包含 "jczl70.com" 或 "mqtt/msg"，则认为是 MQTT Provider
+				if contains(apiGateway, "jczl70.com") || contains(apiGateway, "mqtt/msg") {
+					isMQTTProvider = true
+					zap.S().Infof("Provider %s identified as MQTT provider (by API gateway: %s)", providerCode, apiGateway)
+				}
+			}
+			// 或者根据 code 判断（如果 code 包含 "mqtt"）
+			if contains(providerCode, "mqtt") {
+				isMQTTProvider = true
+				zap.S().Infof("Provider %s identified as MQTT provider (by code)", providerCode)
+			}
+			
+			if isMQTTProvider {
+				zap.S().Infof("Creating MQTT provider: code=%s", providerCode)
+				// 创建 MQTTProvider
+				// 从数据库字段读取配置：
+				// - APIGateway: api_gateway 字段
+				// - ProviderID: merchant_id 字段（作为 id 参数）
+				// - ProviderKey: merchant_key 字段（作为 key 参数）
+				apiGateway := ""
+				if p.APIGateway != nil {
+					apiGateway = *p.APIGateway
+				}
+				providerID := ""
+				if p.MerchantID != nil {
+					providerID = *p.MerchantID
+				}
+				providerKey := ""
+				if p.MerchantKey != nil {
+					providerKey = *p.MerchantKey
+				}
+
+				// 验证必要配置
+				if apiGateway == "" || providerID == "" || providerKey == "" {
+					zap.S().Warnf("MQTT provider %s missing required config, skipping",
+						zap.String("provider_code", providerCode),
+						zap.String("api_gateway", apiGateway),
+						zap.String("provider_id", providerID),
+						zap.Bool("has_key", providerKey != ""))
+					continue
+				}
+
+				// 获取成本（从业务类型配置中获取，或使用默认值）
+				costPerSMS := 1.0
+				if len(businessTypeConfigs) > 0 && businessTypeConfigs[0].Price > 0 {
+					costPerSMS = businessTypeConfigs[0].Price
+				}
+
+				providerInstance = provider.NewMQTTProvider(provider.MQTTConfig{
+					ID:                 providerCode,
+					Name:               getStringValue(p.Name, "MQTT"),
+					APIGateway:         apiGateway,
+					ProviderID:         providerID,
+					ProviderKey:        providerKey,
+					Priority:           100,
+					CostPerSMS:         costPerSMS,
+					SupportedCountries: []string{"CN"},
+					Timeout:            30 * time.Second,
+				})
+				zap.S().Infof("MQTT provider created successfully: code=%s, api_gateway=%s, business_types=%d",
+					providerCode, apiGateway, len(businessTypeConfigs))
+			} else if providerCode == "bigbus666" || contains(providerCode, "bigbus") {
+				zap.S().Infof("Creating BigBus666 provider: code=%s", providerCode)
 				// 创建 BigBus666Provider
 				// 从数据库字段读取配置：
 				// - APIGateway: api_gateway 字段
@@ -138,13 +215,25 @@ func InitProviderManager(db *gorm.DB, providerRepo ProviderRepository, providerB
 				})
 			} else {
 				// 使用本地Provider实现，从数据库读取配置
+				zap.S().Infof("Creating Local provider: code=%s", providerCode)
 				providerInstance = provider.NewLocalProvider(providerCode, getStringValue(p.Name, "Local"), 100, businessTypeConfigs)
 			}
 
-			providerManager.RegisterProvider(providerCode, providerInstance)
+			if err := providerManager.RegisterProvider(providerCode, providerInstance); err != nil {
+				zap.S().Errorf("Failed to register provider %s: %v", providerCode, err)
+				continue
+			}
+			registeredCount++
+			zap.S().Infof("Provider registered successfully: code=%s, type=%s",
+				providerCode, providerInstance.GetProviderInfo().Type)
+		} else {
+			zap.S().Debugf("Skipping provider: code=%s, is_enabled=%v",
+				getStringValue(p.Code, "N/A"),
+				p.IsEnabled != nil && *p.IsEnabled)
 		}
 	}
 
+	zap.S().Infof("Provider manager initialization completed: registered %d providers", registeredCount)
 	return nil
 }
 
@@ -172,10 +261,21 @@ func (pm *ProviderManager) GetProviderByCode(code string) (provider.SMSProvider,
 
 	providerInstance, exists := pm.providers[code]
 	if !exists {
+		zap.S().Warnf("Provider not found: code=%s, available providers: %v", code, pm.getProviderCodes())
 		return nil, fmt.Errorf("provider with code %s not found", code)
 	}
 
+	zap.S().Debugf("Provider retrieved: code=%s, type=%s", code, providerInstance.GetProviderInfo().Type)
 	return providerInstance, nil
+}
+
+// getProviderCodes 获取所有已注册的provider codes（用于日志）
+func (pm *ProviderManager) getProviderCodes() []string {
+	codes := make([]string, 0, len(pm.providers))
+	for code := range pm.providers {
+		codes = append(codes, code)
+	}
+	return codes
 }
 
 // GetAllProviders 获取所有注册的运营商

@@ -9,10 +9,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // BigBus666Provider BigBus666运营商实现
@@ -115,7 +116,7 @@ func (p *BigBus666Provider) GetPhone(ctx context.Context, businessType, cardType
 	}
 
 	// 输出完整配置信息（用于对接）
-	log.Printf("[BigBus666] ========== 获取手机号 - 开始 ==========")
+	zap.S().Infof("[BigBus666] ========== 获取手机号 - 开始 ==========")
 	// 安全显示密钥前4位
 	keyPrefix := ""
 	if len(p.encryptKey) >= 4 {
@@ -123,9 +124,9 @@ func (p *BigBus666Provider) GetPhone(ctx context.Context, businessType, cardType
 	} else {
 		keyPrefix = p.encryptKey
 	}
-	log.Printf("[BigBus666] Provider配置: provider=%s, apiGateway=%s, customerOutNumber=%s, encryptKey前4位=%s",
+	zap.S().Infof("[BigBus666] Provider配置: provider=%s, apiGateway=%s, customerOutNumber=%s, encryptKey前4位=%s",
 		p.info.ID, p.apiGateway, p.customerOutNumber, keyPrefix)
-	log.Printf("[BigBus666] 请求参数: projectName=%s, businessType=%s, cardType=%s",
+	zap.S().Infof("[BigBus666] 请求参数: projectName=%s, businessType=%s, cardType=%s",
 		projectName, businessType, cardType)
 
 	requestData := map[string]string{
@@ -134,7 +135,7 @@ func (p *BigBus666Provider) GetPhone(ctx context.Context, businessType, cardType
 
 	// 输出完整请求数据（JSON格式，用于对接）
 	requestJSON, _ := json.Marshal(requestData)
-	log.Printf("[BigBus666] 请求数据(JSON): %s", string(requestJSON))
+	zap.S().Infof("[BigBus666] 请求数据(JSON): %s", string(requestJSON))
 
 	// 转换为 map[string]interface{}
 	requestDataInterface := make(map[string]interface{})
@@ -144,9 +145,9 @@ func (p *BigBus666Provider) GetPhone(ctx context.Context, businessType, cardType
 
 	response, err := p.callAPI(ctx, "n", requestDataInterface)
 	if err != nil {
-		log.Printf("[BigBus666] 获取手机号API调用失败: provider=%s, projectName=%s, business_type=%s, error=%v",
+		zap.S().Infof("[BigBus666] 获取手机号API调用失败: provider=%s, projectName=%s, business_type=%s, error=%v",
 			p.info.ID, projectName, businessType, err)
-		log.Printf("[BigBus666] ========== 获取手机号 - 失败 ==========")
+		zap.S().Infof("[BigBus666] ========== 获取手机号 - 失败 ==========")
 		return nil, fmt.Errorf("获取手机号失败: %w", err)
 	}
 
@@ -162,19 +163,19 @@ func (p *BigBus666Provider) GetPhone(ctx context.Context, businessType, cardType
 	}
 
 	if err := json.Unmarshal(response, &apiResponse); err != nil {
-		log.Printf("[BigBus666] 解析响应失败: provider=%s, error=%v", p.info.ID, err)
+		zap.S().Infof("[BigBus666] 解析响应失败: provider=%s, error=%v", p.info.ID, err)
 		return nil, fmt.Errorf("解析响应失败: %w", err)
 	}
 
 	if apiResponse.Code != 0 || !apiResponse.Success {
 		// 输出完整错误信息（用于对接）
-		log.Printf("[BigBus666] ========== 获取手机号 - 运营商返回错误 ==========")
-		log.Printf("[BigBus666] 错误详情: code=%d, message=%s, success=%v",
+	zap.S().Infof("[BigBus666] ========== 获取手机号 - 运营商返回错误 ==========")
+	zap.S().Infof("[BigBus666] 错误详情: code=%d, message=%s, success=%v",
 			apiResponse.Code, apiResponse.Message, apiResponse.Success)
-		log.Printf("[BigBus666] 请求信息: URL=%s/%s/%s, projectName=%s, customerOutNumber=%s",
+	zap.S().Infof("[BigBus666] 请求信息: URL=%s/%s/%s, projectName=%s, customerOutNumber=%s",
 			p.apiGateway, "n", p.customerOutNumber, projectName, p.customerOutNumber)
-		log.Printf("[BigBus666] 完整响应数据(JSON): %s", string(response))
-		log.Printf("[BigBus666] ========== 错误信息结束 ==========")
+	zap.S().Infof("[BigBus666] 完整响应数据(JSON): %s", string(response))
+	zap.S().Infof("[BigBus666] ========== 错误信息结束 ==========")
 		return nil, NewProviderError("API_ERROR", apiResponse.Message)
 	}
 
@@ -191,8 +192,8 @@ func (p *BigBus666Provider) GetPhone(ctx context.Context, businessType, cardType
 	p.phoneToExtId[phoneNumber] = extId
 	p.mu.Unlock()
 
-	log.Printf("[BigBus666] 获取手机号成功: provider=%s, phone=%s, ext_id=%s", p.info.ID, phoneNumber, extId)
-	log.Printf("[BigBus666] ========== 获取手机号 - 成功 ==========")
+	zap.S().Infof("[BigBus666] 获取手机号成功: provider=%s, phone=%s, ext_id=%s", p.info.ID, phoneNumber, extId)
+	zap.S().Infof("[BigBus666] ========== 获取手机号 - 成功 ==========")
 
 	return &PhoneResponse{
 		PhoneNumber: phoneNumber,
@@ -227,8 +228,8 @@ func (p *BigBus666Provider) GetCode(ctx context.Context, phoneNumber string, tim
 		}
 	}
 
-	log.Printf("[BigBus666] ========== 获取验证码 - 开始 ==========")
-	log.Printf("[BigBus666] 请求参数: phoneNumber=%s, extId=%s, timeout=%v", phoneNumber, extIdValue, timeout)
+	zap.S().Infof("[BigBus666] ========== 获取验证码 - 开始 ==========")
+	zap.S().Infof("[BigBus666] 请求参数: phoneNumber=%s, extId=%s, timeout=%v", phoneNumber, extIdValue, timeout)
 
 	// 创建带超时的上下文
 	codeCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -243,9 +244,9 @@ func (p *BigBus666Provider) GetCode(ctx context.Context, phoneNumber string, tim
 	for {
 		select {
 		case <-codeCtx.Done():
-			log.Printf("[BigBus666] 获取验证码超时: phoneNumber=%s, extId=%s, 轮询次数=%d, 耗时=%v",
+			zap.S().Infof("[BigBus666] 获取验证码超时: phoneNumber=%s, extId=%s, 轮询次数=%d, 耗时=%v",
 				phoneNumber, extIdValue, pollCount, time.Since(startTime))
-			log.Printf("[BigBus666] ========== 获取验证码 - 超时 ==========")
+			zap.S().Infof("[BigBus666] ========== 获取验证码 - 超时 ==========")
 			return nil, ErrCodeTimeout
 		case <-ticker.C:
 			pollCount++
@@ -256,7 +257,7 @@ func (p *BigBus666Provider) GetCode(ctx context.Context, phoneNumber string, tim
 
 			// 输出请求数据
 			requestJSON, _ := json.Marshal(requestData)
-			log.Printf("[BigBus666] 获取验证码 - 第%d次轮询, 请求数据(JSON): %s", pollCount, string(requestJSON))
+			zap.S().Infof("[BigBus666] 获取验证码 - 第%d次轮询, 请求数据(JSON): %s", pollCount, string(requestJSON))
 
 			// 转换为 map[string]interface{}
 			requestDataInterface := make(map[string]interface{})
@@ -266,7 +267,7 @@ func (p *BigBus666Provider) GetCode(ctx context.Context, phoneNumber string, tim
 
 			response, err := p.callAPI(codeCtx, "r", requestDataInterface)
 			if err != nil {
-				log.Printf("[BigBus666] 获取验证码API调用失败: provider=%s, phone=%s, ext_id=%s, 轮询次数=%d, error=%v",
+				zap.S().Infof("[BigBus666] 获取验证码API调用失败: provider=%s, phone=%s, ext_id=%s, 轮询次数=%d, error=%v",
 					p.info.ID, phoneNumber, extIdValue, pollCount, err)
 				continue // 继续重试
 			}
@@ -284,25 +285,25 @@ func (p *BigBus666Provider) GetCode(ctx context.Context, phoneNumber string, tim
 			}
 
 			if err := json.Unmarshal(response, &apiResponse); err != nil {
-				log.Printf("[BigBus666] 解析验证码响应失败: provider=%s, error=%v", p.info.ID, err)
+				zap.S().Infof("[BigBus666] 解析验证码响应失败: provider=%s, error=%v", p.info.ID, err)
 				continue
 			}
 
 			// 输出完整响应数据
 			responseJSON, _ := json.Marshal(apiResponse)
-			log.Printf("[BigBus666] 获取验证码 - 第%d次轮询响应: code=%d, success=%v, receiveStatus=%d, message=%s",
+			zap.S().Infof("[BigBus666] 获取验证码 - 第%d次轮询响应: code=%d, success=%v, receiveStatus=%d, message=%s",
 				pollCount, apiResponse.Code, apiResponse.Success, apiResponse.Data.ReceiveStatus, apiResponse.Data.Message)
-			log.Printf("[BigBus666] 获取验证码 - 完整响应数据(JSON): %s", string(responseJSON))
+			zap.S().Infof("[BigBus666] 获取验证码 - 完整响应数据(JSON): %s", string(responseJSON))
 
 			if apiResponse.Code != 0 || !apiResponse.Success {
 				// 如果返回错误，继续等待
 				if time.Since(startTime) < timeout {
-					log.Printf("[BigBus666] 获取验证码 - API返回错误但继续等待: code=%d, message=%s",
+					zap.S().Infof("[BigBus666] 获取验证码 - API返回错误但继续等待: code=%d, message=%s",
 						apiResponse.Code, apiResponse.Message)
 					continue
 				}
-				log.Printf("[BigBus666] ========== 获取验证码 - 失败 ==========")
-				log.Printf("[BigBus666] 错误详情: code=%d, message=%s, success=%v",
+				zap.S().Infof("[BigBus666] ========== 获取验证码 - 失败 ==========")
+				zap.S().Infof("[BigBus666] 错误详情: code=%d, message=%s, success=%v",
 					apiResponse.Code, apiResponse.Message, apiResponse.Success)
 				return nil, NewProviderError("API_ERROR", apiResponse.Message)
 			}
@@ -311,9 +312,9 @@ func (p *BigBus666Provider) GetCode(ctx context.Context, phoneNumber string, tim
 			if apiResponse.Data.ReceiveStatus == 1 {
 				// 成功接收到短信
 				code := apiResponse.Data.Message
-				log.Printf("[BigBus666] 获取验证码成功: phoneNumber=%s, extId=%s, code=%s, 轮询次数=%d, 耗时=%v",
+				zap.S().Infof("[BigBus666] 获取验证码成功: phoneNumber=%s, extId=%s, code=%s, 轮询次数=%d, 耗时=%v",
 					phoneNumber, extIdValue, code, pollCount, time.Since(startTime))
-				log.Printf("[BigBus666] ========== 获取验证码 - 成功 ==========")
+				zap.S().Infof("[BigBus666] ========== 获取验证码 - 成功 ==========")
 
 				return &CodeResponse{
 					Code:       code,
@@ -342,31 +343,31 @@ func (p *BigBus666Provider) callAPI(ctx context.Context, endpoint string, reques
 	}
 	jsonStr := string(jsonBytes)
 
-	log.Printf("[BigBus666] API调用 - 请求数据(原始JSON): %s", jsonStr)
+	zap.S().Infof("[BigBus666] API调用 - 请求数据(原始JSON): %s", jsonStr)
 
 	// 2. AES加密
 	encryptedBytes, err := p.encryptAES(jsonStr)
 	if err != nil {
-		log.Printf("[BigBus666] API调用 - 加密失败: %v", err)
+		zap.S().Infof("[BigBus666] API调用 - 加密失败: %v", err)
 		return nil, fmt.Errorf("加密失败: %w", err)
 	}
 
 	// 输出加密后的原始字节数据（十六进制）
-	log.Printf("[BigBus666] API调用 - 加密后原始数据(HEX): %s", hex.EncodeToString(encryptedBytes))
-	log.Printf("[BigBus666] API调用 - 加密后数据长度: %d 字节", len(encryptedBytes))
+	zap.S().Infof("[BigBus666] API调用 - 加密后原始数据(HEX): %s", hex.EncodeToString(encryptedBytes))
+	zap.S().Infof("[BigBus666] API调用 - 加密后数据长度: %d 字节", len(encryptedBytes))
 
 	// 3. Base64编码
 	base64Str := base64.StdEncoding.EncodeToString(encryptedBytes)
 
 	// 4. 构建请求URL
 	url := fmt.Sprintf("%s/%s/%s", p.apiGateway, endpoint, p.customerOutNumber)
-	log.Printf("[BigBus666] API调用 - 完整URL: %s", url)
-	log.Printf("[BigBus666] API调用 - 请求参数: endpoint=%s, customerOutNumber=%s", endpoint, p.customerOutNumber)
+	zap.S().Infof("[BigBus666] API调用 - 完整URL: %s", url)
+	zap.S().Infof("[BigBus666] API调用 - 请求参数: endpoint=%s, customerOutNumber=%s", endpoint, p.customerOutNumber)
 
 	// 5. 创建HTTP请求
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBufferString(base64Str))
 	if err != nil {
-		log.Printf("[BigBus666] API调用 - 创建请求失败: %v", err)
+		zap.S().Infof("[BigBus666] API调用 - 创建请求失败: %v", err)
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
 
@@ -374,55 +375,55 @@ func (p *BigBus666Provider) callAPI(ctx context.Context, endpoint string, reques
 	req.Header.Set("User-Agent", "Chrome/69.0.3497.81 Safari/537.36")
 
 	// 输出加密后的Base64数据（用于对接）
-	log.Printf("[BigBus666] API调用 - 加密后Base64数据: %s", base64Str)
-	log.Printf("[BigBus666] API调用 - 请求头: Content-Type=%s, User-Agent=%s", req.Header.Get("Content-Type"), req.Header.Get("User-Agent"))
+	zap.S().Infof("[BigBus666] API调用 - 加密后Base64数据: %s", base64Str)
+	zap.S().Infof("[BigBus666] API调用 - 请求头: Content-Type=%s, User-Agent=%s", req.Header.Get("Content-Type"), req.Header.Get("User-Agent"))
 
 	// 6. 发送请求
-	log.Printf("[BigBus666] API调用 - 发送POST请求到: %s", url)
+	zap.S().Infof("[BigBus666] API调用 - 发送POST请求到: %s", url)
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		log.Printf("[BigBus666] API调用 - 请求失败: %v", err)
+		zap.S().Infof("[BigBus666] API调用 - 请求失败: %v", err)
 		return nil, fmt.Errorf("请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
-	log.Printf("[BigBus666] API调用 - HTTP状态码: %d", resp.StatusCode)
+	zap.S().Infof("[BigBus666] API调用 - HTTP状态码: %d", resp.StatusCode)
 
 	// 7. 读取响应
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("[BigBus666] API调用 - 读取响应失败: %v", err)
+		zap.S().Infof("[BigBus666] API调用 - 读取响应失败: %v", err)
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
 
-	log.Printf("[BigBus666] API调用 - 原始响应数据(Base64): %s", string(respBody))
-	log.Printf("[BigBus666] API调用 - 响应长度: %d 字节", len(respBody))
+	zap.S().Infof("[BigBus666] API调用 - 原始响应数据(Base64): %s", string(respBody))
+	zap.S().Infof("[BigBus666] API调用 - 响应长度: %d 字节", len(respBody))
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[BigBus666] API调用 - HTTP错误: 状态码=%d, 响应内容=%s", resp.StatusCode, string(respBody))
+		zap.S().Infof("[BigBus666] API调用 - HTTP错误: 状态码=%d, 响应内容=%s", resp.StatusCode, string(respBody))
 		return nil, fmt.Errorf("HTTP错误: %d, 响应: %s", resp.StatusCode, string(respBody))
 	}
 
 	// 8. Base64解码
 	encryptedResponse, err := base64.StdEncoding.DecodeString(string(respBody))
 	if err != nil {
-		log.Printf("[BigBus666] API调用 - Base64解码失败: %v, 响应长度: %d", err, len(respBody))
+		zap.S().Infof("[BigBus666] API调用 - Base64解码失败: %v, 响应长度: %d", err, len(respBody))
 		return nil, fmt.Errorf("Base64解码失败: %w", err)
 	}
 
 	// 输出解密前的加密数据（十六进制）
-	log.Printf("[BigBus666] API调用 - 解密前加密数据(HEX): %s", hex.EncodeToString(encryptedResponse))
-	log.Printf("[BigBus666] API调用 - 解密前加密数据长度: %d 字节", len(encryptedResponse))
+	zap.S().Infof("[BigBus666] API调用 - 解密前加密数据(HEX): %s", hex.EncodeToString(encryptedResponse))
+	zap.S().Infof("[BigBus666] API调用 - 解密前加密数据长度: %d 字节", len(encryptedResponse))
 
 	// 9. AES解密
 	decryptedBytes, err := p.decryptAES(encryptedResponse)
 	if err != nil {
-		log.Printf("[BigBus666] API调用 - AES解密失败: %v, 加密数据长度=%d", err, len(encryptedResponse))
+		zap.S().Infof("[BigBus666] API调用 - AES解密失败: %v, 加密数据长度=%d", err, len(encryptedResponse))
 		return nil, fmt.Errorf("解密失败: %w", err)
 	}
 
 	// 输出完整响应数据（用于对接）
-	log.Printf("[BigBus666] API调用 - 解密后响应数据(JSON): %s", string(decryptedBytes))
+	zap.S().Infof("[BigBus666] API调用 - 解密后响应数据(JSON): %s", string(decryptedBytes))
 	return decryptedBytes, nil
 }
 
@@ -494,32 +495,37 @@ func (p *BigBus666Provider) pkcs7Unpadding(data []byte) []byte {
 // ReleasePhone 释放手机号
 // 根据 BigBus666 API 文档，释放接口应该是 /d/{customerOutNumber} (delete)
 // 请求参数: {"extId": "xxx"}
-// 注意：如果内存映射中没有 extId，说明可能是从数据库恢复的，需要从外部传入 extId
-// 但目前接口只接收 phoneNumber，所以如果内存中没有，会返回错误
-// 建议：定时任务在调用 ReleasePhone 前，应该确保 extId 已经通过 GetPhone 保存到内存中
-func (p *BigBus666Provider) ReleasePhone(ctx context.Context, phoneNumber string) error {
+// extId 参数：如果提供了 extId，直接使用；否则从内存映射中查找
+func (p *BigBus666Provider) ReleasePhone(ctx context.Context, phoneNumber string, extId ...string) error {
 	if !p.IsHealthy(ctx) {
 		return ErrProviderUnavailable
 	}
 
-	// 获取对应的extId（优先从内存映射中查找）
-	p.mu.RLock()
-	extId, exists := p.phoneToExtId[phoneNumber]
-	p.mu.RUnlock()
+	var extIdValue string
+	// 如果提供了 extId 参数，直接使用
+	if len(extId) > 0 && extId[0] != "" {
+		extIdValue = extId[0]
+	} else {
+		// 否则从内存映射中查找
+		p.mu.RLock()
+		var exists bool
+		extIdValue, exists = p.phoneToExtId[phoneNumber]
+		p.mu.RUnlock()
 
-	if !exists {
-		log.Printf("[BigBus666] 释放手机号失败: 手机号 %s 未找到对应的extId（内存映射中不存在）", phoneNumber)
-		log.Printf("[BigBus666] 提示: 如果 extId 存储在数据库中，需要从数据库读取并重建映射关系")
-		return NewProviderError("INVALID_PHONE", fmt.Sprintf("手机号 %s 未找到对应的extId", phoneNumber))
+		if !exists {
+			zap.S().Infof("[BigBus666] 释放手机号失败: 手机号 %s 未找到对应的extId（内存映射中不存在）", phoneNumber)
+			zap.S().Infof("[BigBus666] 提示: 如果 extId 存储在数据库中，请从数据库读取并作为参数传入")
+			return NewProviderError("INVALID_PHONE", fmt.Sprintf("手机号 %s 未找到对应的extId", phoneNumber))
+		}
 	}
 
-	log.Printf("[BigBus666] ========== 释放手机号 - 开始 ==========")
-	log.Printf("[BigBus666] 释放参数: phoneNumber=%s, extId=%s", phoneNumber, extId)
+	zap.S().Infof("[BigBus666] ========== 释放手机号 - 开始 ==========")
+	zap.S().Infof("[BigBus666] 释放参数: phoneNumber=%s, extId=%s", phoneNumber, extIdValue)
 
 	// 根据 BigBus666 API 文档，释放接口可能是 /d/{customerOutNumber} (delete)
 	// 请求参数: {"extId": "xxx"}
 	requestData := map[string]string{
-		"extId": extId,
+		"extId": extIdValue,
 	}
 
 	// 转换为 map[string]interface{}
@@ -530,11 +536,11 @@ func (p *BigBus666Provider) ReleasePhone(ctx context.Context, phoneNumber string
 
 	// 调用释放接口，通常释放接口的 endpoint 是 "d" (delete)
 	// 如果文档中没有明确说明，可能需要根据实际情况调整
-	response, err := p.callAPI(ctx, "d", requestDataInterface)
-	if err != nil {
-		log.Printf("[BigBus666] 释放手机号API调用失败: provider=%s, phone=%s, ext_id=%s, error=%v",
-			p.info.ID, phoneNumber, extId, err)
-		log.Printf("[BigBus666] ========== 释放手机号 - 失败 ==========")
+		response, err := p.callAPI(ctx, "d", requestDataInterface)
+		if err != nil {
+			zap.S().Infof("[BigBus666] 释放手机号API调用失败: provider=%s, phone=%s, ext_id=%s, error=%v",
+				p.info.ID, phoneNumber, extIdValue, err)
+		zap.S().Infof("[BigBus666] ========== 释放手机号 - 失败 ==========")
 		return fmt.Errorf("释放手机号失败: %w", err)
 	}
 
@@ -546,26 +552,26 @@ func (p *BigBus666Provider) ReleasePhone(ctx context.Context, phoneNumber string
 	}
 
 	if err := json.Unmarshal(response, &apiResponse); err != nil {
-		log.Printf("[BigBus666] 解析释放响应失败: provider=%s, error=%v", p.info.ID, err)
-		log.Printf("[BigBus666] ========== 释放手机号 - 失败 ==========")
+		zap.S().Infof("[BigBus666] 解析释放响应失败: provider=%s, error=%v", p.info.ID, err)
+		zap.S().Infof("[BigBus666] ========== 释放手机号 - 失败 ==========")
 		return fmt.Errorf("解析响应失败: %w", err)
 	}
 
 	if apiResponse.Code != 0 || !apiResponse.Success {
-		log.Printf("[BigBus666] 释放手机号返回错误: provider=%s, code=%d, message=%s",
+		zap.S().Infof("[BigBus666] 释放手机号返回错误: provider=%s, code=%d, message=%s",
 			p.info.ID, apiResponse.Code, apiResponse.Message)
-		log.Printf("[BigBus666] ========== 释放手机号 - 失败 ==========")
+		zap.S().Infof("[BigBus666] ========== 释放手机号 - 失败 ==========")
 		return NewProviderError("API_ERROR", apiResponse.Message)
 	}
 
 	// 清理映射关系
 	p.mu.Lock()
 	delete(p.phoneToExtId, phoneNumber)
-	delete(p.extIdToPhone, extId)
+	delete(p.extIdToPhone, extIdValue)
 	p.mu.Unlock()
 
-	log.Printf("[BigBus666] 释放手机号成功: provider=%s, phone=%s, ext_id=%s", p.info.ID, phoneNumber, extId)
-	log.Printf("[BigBus666] ========== 释放手机号 - 成功 ==========")
+	zap.S().Infof("[BigBus666] 释放手机号成功: provider=%s, phone=%s, ext_id=%s", p.info.ID, phoneNumber, extIdValue)
+	zap.S().Infof("[BigBus666] ========== 释放手机号 - 成功 ==========")
 
 	return nil
 }

@@ -28,7 +28,7 @@ func (r *providerBusinessTypeRepository) FindByID(ctx context.Context, id int64)
 func (r *providerBusinessTypeRepository) FindByProviderCodeAndBusinessCode(ctx context.Context, providerCode, businessCode string) (*domain.ProviderBusinessType, error) {
 	var businessType domain.ProviderBusinessType
 	err := r.db.WithContext(ctx).
-		Where("provider_code = ? AND business_code = ? AND status = ?", providerCode, businessCode, true).
+		Where("provider_code = ? AND business_code = ? AND (status IS NULL OR status = ?)", providerCode, businessCode, true).
 		First(&businessType).Error
 	if err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func (r *providerBusinessTypeRepository) FindByProviderCodeAndBusinessCode(ctx c
 func (r *providerBusinessTypeRepository) FindByProviderCode(ctx context.Context, providerCode string) ([]*domain.ProviderBusinessType, error) {
 	var businessTypes []*domain.ProviderBusinessType
 	err := r.db.WithContext(ctx).
-		Where("provider_code = ? AND status = ?", providerCode, true).
+		Where("provider_code = ? AND (status IS NULL OR status = ?)", providerCode, true).
 		Find(&businessTypes).Error
 	return businessTypes, err
 }
