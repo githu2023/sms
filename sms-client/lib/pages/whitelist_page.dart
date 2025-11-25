@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/api_client.dart';
 import '../l10n/app_localizations.dart';
 import '../models/whitelist.dart';
 
@@ -10,8 +11,10 @@ class WhitelistPage extends StatefulWidget {
 }
 
 class _WhitelistPageState extends State<WhitelistPage> {
-  final List<Whitelist> _whitelists = [];
+  final ApiClient _apiClient = ApiClient();
+  List<Whitelist> _whitelists = [];
   bool _isLoading = false;
+  String? _error;
 
   @override
   void initState() {
@@ -22,14 +25,29 @@ class _WhitelistPageState extends State<WhitelistPage> {
   Future<void> _loadWhitelists() async {
     setState(() {
       _isLoading = true;
+      _error = null;
     });
 
-    // TODO: Load from API
-    await Future.delayed(const Duration(seconds: 1));
-
-    setState(() {
-      _isLoading = false;
-    });
+    try {
+      final response = await _apiClient.getWhitelists();
+      if (response.success && response.data != null) {
+        setState(() {
+          _whitelists = response.data!;
+        });
+      } else {
+        setState(() {
+          _error = response.message;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = 'Network error: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _addWhitelist() async {
@@ -39,46 +57,135 @@ class _WhitelistPageState extends State<WhitelistPage> {
     );
 
     if (result != null) {
-      // TODO: Add via API
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Added successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      _loadWhitelists();
+      final ip = result['ip']!.trim();
+      final notes = result['notes']?.trim();
+
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+        final response = await _apiClient.addWhitelist(
+          ipAddress: ip,
+          notes: notes?.isEmpty ?? true ? null : notes,
+        );
+
+        if (response.success && response.data != null) {
+          setState(() {
+            _whitelists = [..._whitelists, response.data!];
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  AppLocalizations.of(context)!.addWhitelistSuccess,
+                ),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  response.message ??
+                      AppLocalizations.of(context)!.addWhitelistFailed,
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${AppLocalizations.of(context)!.addWhitelistFailed}: $e',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> _deleteWhitelist(Whitelist whitelist) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(AppLocalizations.of(context)!.delete),
-        content: Text('Delete ${whitelist.ipAddress}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+      builder:
+          (context) => AlertDialog(
+            title: Text(l10n.delete),
+            content: Text(
+              '${l10n.deleteWhitelistConfirm}\n${whitelist.ipAddress}',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: Text(l10n.delete),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text(AppLocalizations.of(context)!.delete),
-          ),
-        ],
-      ),
     );
 
     if (confirmed == true) {
-      // TODO: Delete via API
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Deleted successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      _loadWhitelists();
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+        final response = await _apiClient.deleteWhitelist(
+          ipAddress: whitelist.ipAddress,
+        );
+        if (response.success) {
+          setState(() {
+            _whitelists =
+                _whitelists.where((item) => item.id != whitelist.id).toList();
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(l10n.deleteWhitelistSuccess),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(response.message ?? l10n.deleteWhitelistFailed),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${l10n.deleteWhitelistFailed}: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -90,30 +197,20 @@ class _WhitelistPageState extends State<WhitelistPage> {
       appBar: AppBar(
         title: Text(l10n.whitelist),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _addWhitelist,
-          ),
+          IconButton(icon: const Icon(Icons.add), onPressed: _addWhitelist),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _whitelists.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.shield, size: 64, color: Colors.grey),
-                      const SizedBox(height: 16),
-                      Text(
-                        l10n.noData,
-                        style:
-                            const TextStyle(color: Colors.grey, fontSize: 16),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
+              ? _buildErrorState(l10n)
+              : _whitelists.isEmpty
+              ? _buildEmptyState(l10n)
+              : RefreshIndicator(
+                onRefresh: _loadWhitelists,
+                child: ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   itemCount: _whitelists.length,
                   itemBuilder: (context, index) {
                     final whitelist = _whitelists[index];
@@ -125,9 +222,10 @@ class _WhitelistPageState extends State<WhitelistPage> {
                       child: ListTile(
                         leading: const Icon(Icons.computer),
                         title: Text(whitelist.ipAddress),
-                        subtitle: whitelist.notes != null
-                            ? Text(whitelist.notes!)
-                            : null,
+                        subtitle:
+                            whitelist.notes?.isNotEmpty == true
+                                ? Text(whitelist.notes!)
+                                : null,
                         trailing: IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
                           onPressed: () => _deleteWhitelist(whitelist),
@@ -136,6 +234,53 @@ class _WhitelistPageState extends State<WhitelistPage> {
                     );
                   },
                 ),
+              ),
+    );
+  }
+
+  Widget _buildEmptyState(AppLocalizations l10n) {
+    return RefreshIndicator(
+      onRefresh: _loadWhitelists,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 120),
+          Icon(Icons.shield, size: 64, color: Colors.grey.shade400),
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
+              l10n.noData,
+              style: const TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState(AppLocalizations l10n) {
+    return RefreshIndicator(
+      onRefresh: _loadWhitelists,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(24),
+        children: [
+          const SizedBox(height: 80),
+          Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
+          const SizedBox(height: 16),
+          Text(
+            _error ?? l10n.error,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.red),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: _loadWhitelists,
+            icon: const Icon(Icons.refresh),
+            label: Text(l10n.retryGetCode),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -174,17 +319,17 @@ class _AddWhitelistDialogState extends State<_AddWhitelistDialog> {
               controller: _ipController,
               decoration: InputDecoration(
                 labelText: l10n.ipAddress,
-                hintText: '192.168.1.1',
+                hintText: '1.2.3.4 / 1.2.3.0/24',
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'Please enter IP address';
+                  return l10n.ipAddressRequired;
                 }
-                // Simple IP validation
-                final ipPattern = RegExp(
-                    r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$');
-                if (!ipPattern.hasMatch(value)) {
-                  return 'Invalid IP address';
+                final pattern = RegExp(
+                  r'^(\d{1,3}\.){3}\d{1,3}(\/([0-2]?[0-9]|3[0-2]))?$',
+                );
+                if (!pattern.hasMatch(value.trim())) {
+                  return l10n.invalidIpFormat;
                 }
                 return null;
               },
@@ -192,9 +337,7 @@ class _AddWhitelistDialogState extends State<_AddWhitelistDialog> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _notesController,
-              decoration: InputDecoration(
-                labelText: l10n.notes,
-              ),
+              decoration: InputDecoration(labelText: l10n.notesOptional),
               maxLines: 2,
             ),
           ],

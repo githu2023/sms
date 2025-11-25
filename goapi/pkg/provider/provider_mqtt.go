@@ -135,8 +135,8 @@ func (p *MQTTProvider) GetPhone(ctx context.Context, businessType, cardType stri
 	zap.S().Infof("[MQTTProvider] 原始响应数据: %s", string(respBody))
 
 	if resp.StatusCode != http.StatusOK {
-		zap.S().Errorf("[MQTTProvider] HTTP错误: 状态码=%d, 响应内容=%s", resp.StatusCode, string(respBody))
-		zap.S().Errorf("[MQTTProvider] ========== 获取手机号 - 失败 ==========")
+		zap.S().Warnf("[MQTTProvider] HTTP错误: 状态码=%d, 响应内容=%s", resp.StatusCode, string(respBody))
+		zap.S().Warnf("[MQTTProvider] ========== 获取手机号 - 失败 ==========")
 		return nil, fmt.Errorf("HTTP错误: %d, 响应: %s", resp.StatusCode, string(respBody))
 	}
 
@@ -154,8 +154,8 @@ func (p *MQTTProvider) GetPhone(ctx context.Context, businessType, cardType stri
 	}
 
 	if apiResponse.Number == "" || apiResponse.ExtId == "" {
-		zap.S().Errorf("[MQTTProvider] 返回数据不完整: number=%s, extId=%s", apiResponse.Number, apiResponse.ExtId)
-		zap.S().Errorf("[MQTTProvider] ========== 获取手机号 - 失败 ==========")
+		zap.S().Warnf("[MQTTProvider] 返回数据不完整: number=%s, extId=%s", apiResponse.Number, apiResponse.ExtId)
+		zap.S().Warnf("[MQTTProvider] ========== 获取手机号 - 失败 ==========")
 		return nil, NewProviderError("INVALID_RESPONSE", "返回数据不完整")
 	}
 

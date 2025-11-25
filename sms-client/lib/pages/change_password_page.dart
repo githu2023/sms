@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/api_client.dart';
 import '../l10n/app_localizations.dart';
 
 class ChangePasswordPage extends StatefulWidget {
@@ -9,6 +10,7 @@ class ChangePasswordPage extends StatefulWidget {
 }
 
 class _ChangePasswordPageState extends State<ChangePasswordPage> {
+  final ApiClient _apiClient = ApiClient();
   final _formKey = GlobalKey<FormState>();
   final _currentPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
@@ -33,23 +35,51 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       _isLoading = true;
     });
 
-    // TODO: Call API to change password
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      final response = await _apiClient.changePassword(
+        oldPassword: _currentPasswordController.text.trim(),
+        newPassword: _newPasswordController.text.trim(),
+      );
 
-    setState(() {
-      _isLoading = false;
-    });
+      setState(() {
+        _isLoading = false;
+      });
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Password changed successfully'),
-        backgroundColor: Colors.green,
-      ),
-    );
-
-    Navigator.of(context).pop();
+      if (response.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.changePasswordSuccess),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.of(context).pop();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              response.message ??
+                  AppLocalizations.of(context)!.changePasswordFailed,
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${AppLocalizations.of(context)!.changePasswordFailed}: $e',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -57,9 +87,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.changePassword),
-      ),
+      appBar: AppBar(title: Text(l10n.changePassword)),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -73,7 +101,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   controller: _currentPasswordController,
                   obscureText: _obscureCurrentPassword,
                   decoration: InputDecoration(
-                    labelText: 'Current Password',
+                    labelText: l10n.currentPasswordLabel,
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -91,7 +119,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Please enter current password';
+                      return l10n.passwordRequired;
                     }
                     return null;
                   },
@@ -104,7 +132,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   controller: _newPasswordController,
                   obscureText: _obscureNewPassword,
                   decoration: InputDecoration(
-                    labelText: 'New Password',
+                    labelText: l10n.newPasswordLabel,
                     prefixIcon: const Icon(Icons.lock),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -122,13 +150,13 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Please enter new password';
+                      return l10n.passwordRequired;
                     }
                     if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
+                      return l10n.passwordTooShort;
                     }
                     if (value == _currentPasswordController.text) {
-                      return 'New password must be different';
+                      return l10n.passwordUnchanged;
                     }
                     return null;
                   },
@@ -141,7 +169,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   controller: _confirmPasswordController,
                   obscureText: _obscureConfirmPassword,
                   decoration: InputDecoration(
-                    labelText: 'Confirm Password',
+                    labelText: l10n.confirmPasswordLabel,
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -159,7 +187,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   ),
                   validator: (value) {
                     if (value != _newPasswordController.text) {
-                      return 'Passwords do not match';
+                      return l10n.passwordMismatch;
                     }
                     return null;
                   },
@@ -173,20 +201,22 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+                  child:
+                      _isLoading
+                          ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                          : Text(
+                            l10n.changePassword,
+                            style: const TextStyle(fontSize: 16),
                           ),
-                        )
-                      : Text(
-                          l10n.changePassword,
-                          style: const TextStyle(fontSize: 16),
-                        ),
                 ),
               ],
             ),

@@ -42,6 +42,14 @@ func (m *MockAssignmentService) GetCostStatistics(ctx context.Context, customerI
 	return args.Get(0).(*service.AssignmentStatistics), args.Error(1)
 }
 
+func (m *MockAssignmentService) GetRecentAssignments(ctx context.Context, customerID int64, limit int) ([]*domain.PhoneAssignment, error) {
+	args := m.Called(ctx, customerID, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.PhoneAssignment), args.Error(1)
+}
+
 /*
 // Commenting out unimplemented/misaligned mock methods
 func (m *MockAssignmentService) GetAssignmentHistory(ctx context.Context, customerID int64, page, limit int) (*service.AssignmentHistoryResult, error) {
@@ -242,6 +250,51 @@ func TestAssignmentHandler_GetAssignments_ServiceError(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
 	assert.Equal(t, common.CodeInternalError, response.Code)
+
+	mockService.AssertExpectations(t)
+}
+
+func TestAssignmentHandler_GetRecentAssignments_Success(t *testing.T) {
+	mockService := &MockAssignmentService{}
+	handler := NewAssignmentHandler(mockService)
+	router := testutils.SetupTestRouter()
+
+	now := time.Now()
+	phone := "+15550001111"
+	status := "completed"
+	assignments := []*domain.PhoneAssignment{
+		{
+			ID:          1,
+			PhoneNumber: &phone,
+			Status:      &status,
+			CreatedAt:   now,
+		},
+	}
+
+	mockService.On("GetRecentAssignments", mock.Anything, int64(1), 5).Return(assignments, nil)
+
+	router.GET("/client/v1/assignments/recent", func(c *gin.Context) {
+		c.Set("customer_id", int64(1))
+		handler.GetRecentAssignments(c)
+	})
+
+	req, _ := http.NewRequest("GET", "/client/v1/assignments/recent", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response common.APIResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, common.CodeSuccess, response.Code)
+
+	data, ok := response.Data.(map[string]interface{})
+	assert.True(t, ok)
+	items := data["items"].([]interface{})
+	assert.Len(t, items, 1)
+	item := items[0].(map[string]interface{})
+	assert.Equal(t, phone, item["phone_number"])
 
 	mockService.AssertExpectations(t)
 }

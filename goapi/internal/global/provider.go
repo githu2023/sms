@@ -191,7 +191,7 @@ func InitProviderManager(db *gorm.DB, providerRepo ProviderRepository, providerB
 
 				// 验证必要配置
 				if apiGateway == "" || customerOutNumber == "" || encryptKey == "" {
-					fmt.Printf("Warning: BigBus666 provider %s missing required config (api_gateway, merchant_id, or merchant_key), skipping\n", providerCode)
+					zap.S().Warnf("BigBus666 provider %s missing required config (api_gateway, merchant_id, or merchant_key), skipping", providerCode)
 					continue
 				}
 

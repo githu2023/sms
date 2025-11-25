@@ -2,21 +2,24 @@ class Whitelist {
   final String id;
   final String ipAddress;
   final String? notes;
-  final DateTime createdAt;
+  final DateTime? createdAt;
 
-  Whitelist({
+  const Whitelist({
     required this.id,
     required this.ipAddress,
     this.notes,
-    required this.createdAt,
+    this.createdAt,
   });
 
   factory Whitelist.fromJson(Map<String, dynamic> json) {
     return Whitelist(
-      id: json['id'] as String,
-      ipAddress: json['ip_address'] as String,
+      id: (json['id'] ?? '').toString(),
+      ipAddress: json['ip_address'] as String? ?? '',
       notes: json['notes'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt:
+          json['created_at'] != null
+              ? DateTime.tryParse(json['created_at'] as String)
+              : null,
     );
   }
 
@@ -25,7 +28,7 @@ class Whitelist {
       'id': id,
       'ip_address': ipAddress,
       'notes': notes,
-      'created_at': createdAt.toIso8601String(),
+      'created_at': createdAt?.toIso8601String(),
     };
   }
 }

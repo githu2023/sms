@@ -279,7 +279,7 @@
 | `token` | string | 生成的JWT。 |
 | `expires_in`| integer | JWT的有效时长（秒）。 |
 
-#### `POST /client/v1/change_password`
+#### `POST /client/v1/password/change`
 **描述:** 允许已登录用户修改自己的密码。
 **请求头:** `Authorization: Bearer <jwt>`
 **请求体:**
@@ -287,10 +287,7 @@
 | :--- | :--- | :--- | :--- |
 | `old_password` | string | 是 | 用户的当前密码。 |
 | `new_password` | string | 是 | 用户的新密码。 |
-**成功响应 (`data` 对象):**
-| 字段 | 类型 | 描述 |
-| :--- | :--- | :--- |
-| `message` | string | 始终返回“密码修改成功”。 |
+**成功响应:** 无`data`对象，仅返回成功消息。
 
 ### 3.2. 核心与账户API
 *(以下所有接口都需要 `Authorization: Bearer <jwt>`)*
@@ -308,24 +305,6 @@
 | `registration_ip`| string | 注册时使用的IP。 |
 | `last_login_at`| string | 上次登录的ISO 8601格式时间戳。 |
 
-#### `GET /client/v1/balance`
-**描述:** 查询当前账户余额。
-**成功响应 (`data` 对象):**
-| 字段 | 类型 | 描述 |
-| :--- | :--- | :--- |
-| `balance` | number | 当前余额，单位元（示例：9996.99）。 |
-| `currency` | string | 货币代码，当前固定为 `USD`。 |
-
-#### `GET /client/v1/business_types`
-**描述:** 返回当前客户可用的业务类型列表。
-**成功响应 (`data` 数组):**
-| 字段 | 类型 | 描述 |
-| :--- | :--- | :--- |
-| `id` | integer | 业务配置ID。 |
-| `business_code` | string | 业务编码，如 `wx`、`qq`。 |
-| `business_name` | string | 业务名称，如 “微信”。 |
-| `weight` | integer | 权重，用于多渠道路由。 |
-
 #### `GET /client/v1/assignments`
 **描述:** 分页获取用户的手机号分配历史记录。
 **查询参数:**
@@ -337,21 +316,17 @@
 | 字段 | 类型 | 描述 |
 | :--- | :--- | :--- |
 | `items` | array | 分配记录对象的数组。 |
-| `items[].id` | integer | 分配记录ID。 |
-| `items[].phone_number` | string | 分配的手机号。 |
-| `items[].business_type`| string | 业务类型代码 (例如: "wx")。 |
-| `items[].card_type` | string | 卡类型（当前固定返回 "virtual"）。 |
-| `items[].verification_code` | string | 最新验证码（若仍在等待则为空字符串）。 |
-| `items[].cost` | number | 本次分配的费用（`merchant_fee`）。 |
-| `items[].status` | integer | 状态：1=pending、2=completed、3=expired、4=failed。 |
-| `items[].created_at` | string | 创建时间 (ISO 8601)。 |
-| `items[].provider_name` | string | 渠道名称（若可获取）。 |
+| `items[].phone` | string | 分配的手机号。 |
+| `items[].business_type`| string | 业务类型代码 (例如: "qq")。 |
+| `items[].card_type` | string | SIM卡类型 (例如: "physical", "virtual")。 |
+| `items[].code` | string | 收到的验证码 (可能为空)。 |
+| `items[].cost` | number | 本次分配的费用。 |
+| `items[].status` | string | 最终状态 (例如: "completed", "expired")。 |
+| `items[].created_at` | string | 创建时间的ISO 8601格式时间戳。 |
 | `pagination` | object | 分页元数据。 |
 | `pagination.total` | integer | 记录总数。 |
 | `pagination.page` | integer | 当前页码。 |
 | `pagination.limit` | integer | 每页项目数。 |
-
-> `/api/v1/assignments` 与该接口响应结构一致，只是认证方式不同。
 
 #### `POST /client/v1/get_phone`
 **描述:** 使用客户端JWT认证，为指定业务类型批量请求新手机号（支持1-10个）。
@@ -390,66 +365,11 @@
 
 #### 其他接口
 `/client/v1/`下的下列接口与其在`/api/v1/`中的对应接口功能相同，但使用JWT认证并代表当前登录用户进行操作：
-- `GET /client/v1/assignments/recent`
+- `GET /client/v1/balance`
+- `GET /client/v1/business_types`
 - `GET /client/v1/whitelist`
 - `POST /client/v1/whitelist`
 - `DELETE /client/v1/whitelist`（使用请求体传递`ip_address`）
-
-#### `GET /client/v1/assignments/recent`
-**描述:** 获取最近的手机号获取记录（默认最新5条，可自定义1-50之间）。
-**请求头:** `Authorization: Bearer <jwt>`
-
-**查询参数:**
-| 字段 | 类型 | 默认值 | 描述 |
-| :--- | :--- | :--- | :--- |
-| `limit` | integer | 5 | 返回的记录条数，范围 1-50。 |
-
-**成功响应 (`data` 对象):**
-```json
-{
-  "items": [
-    {
-      "id": 1,
-      "phone_number": "15820192778",
-      "business_type": "wx",
-      "card_type": "physical",
-      "verification_code": "",
-      "cost": 0.01,
-      "status": 1,
-      "created_at": "2025-11-25T11:25:02+08:00",
-      "provider_name": "MQTT"
-    }
-  ]
-}
-```
-> 与 `/client/v1/assignments` 的单页结果一致，但不返回分页信息，适合刷新时快速显示最近记录。同名接口 `/api/v1/assignments/recent` 也可用于程序化查询。
-
-#### `GET /client/v1/whitelist`
-**描述:** 分页查询白名单。
-**查询参数:** `page`（默认1）、`limit`（默认20）。
-**成功响应:**
-```json
-{
-  "total": 2,
-  "list": [
-    {
-      "id": 10,
-      "customer_id": 4,
-      "ip_address": "1.2.3.4",
-      "notes": "办公室IP",
-      "created_at": 1732525210
-    }
-  ]
-}
-```
-
-#### `POST /client/v1/whitelist`
-**请求体:** `{ "ip_address": "1.2.3.4", "notes": "描述" }`
-**成功响应:** `{"message":"添加成功"}`。
-
-#### `DELETE /client/v1/whitelist`
-**请求体:** `{ "ip_address": "1.2.3.4" }`
-**成功响应:** `{"message":"删除成功"}`。
 
 ### 3.3. 客户端典型流程（推荐）
 

@@ -7,7 +7,7 @@ import 'core/theme.dart';
 import 'providers/locale_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/auth_provider.dart';
-import 'pages/login_page.dart';
+import 'pages/splash_page.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -25,12 +25,12 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'SMS Platform',
             debugShowCheckedModeBanner: false,
-            
+
             // 主题配置
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: themeProvider.themeMode,
-            
+
             // 国际化配置
             locale: localeProvider.locale,
             localizationsDelegates: const [
@@ -39,13 +39,10 @@ class MyApp extends StatelessWidget {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            supportedLocales: const [
-              Locale('zh'),
-              Locale('en'),
-            ],
-            
-            // 路由配置
-            home: const LoginPage(),
+            supportedLocales: const [Locale('zh'), Locale('en')],
+
+            // 路由配置 - 启动时检查登录状态
+            home: const SplashPage(),
           );
         },
       ),

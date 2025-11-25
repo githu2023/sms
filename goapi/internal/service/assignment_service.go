@@ -23,6 +23,7 @@ type AssignmentStatistics struct {
 type AssignmentService interface {
 	GetAssignments(ctx context.Context, customerID int64, page, limit int, status int, businessType string, startDate, endDate *time.Time) ([]*domain.PhoneAssignment, int64, error)
 	GetCostStatistics(ctx context.Context, customerID int64, startDate, endDate *time.Time) (*AssignmentStatistics, error)
+	GetRecentAssignments(ctx context.Context, customerID int64, limit int) ([]*domain.PhoneAssignment, error)
 }
 
 // assignmentService implements AssignmentService
@@ -149,4 +150,20 @@ func (s *assignmentService) GetCostStatistics(ctx context.Context, customerID in
 		TotalCost:  totalCost,
 		TotalCount: totalCount,
 	}, nil
+}
+
+// GetRecentAssignments 返回最近的手机号分配记录
+func (s *assignmentService) GetRecentAssignments(ctx context.Context, customerID int64, limit int) ([]*domain.PhoneAssignment, error) {
+	if limit <= 0 {
+		limit = 5
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	assignments, _, err := s.assignmentRepo.FindRecentByCustomerID(ctx, customerID, limit, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get recent assignments: %w", err)
+	}
+	return assignments, nil
 }

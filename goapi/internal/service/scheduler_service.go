@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"sms-platform/goapi/internal/config"
 	"sms-platform/goapi/internal/domain"
 	"sms-platform/goapi/internal/global"
@@ -11,6 +10,7 @@ import (
 	"sms-platform/goapi/pkg/provider"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -49,7 +49,7 @@ func NewSchedulerService(
 
 // Start 启动定时任务
 func (s *SchedulerService) Start() {
-	log.Println("Starting scheduler service...")
+	zap.S().Info("Starting scheduler service...")
 
 	// 启动验证码检查定时器
 	s.codeCheckTicker = time.NewTicker(time.Duration(s.cfg.CodeCheckInterval) * time.Second)
@@ -59,13 +59,13 @@ func (s *SchedulerService) Start() {
 	s.cleanupTicker = time.NewTicker(time.Duration(s.cfg.AssignmentCleanupInterval) * time.Second)
 	go s.runCleanupTask()
 
-	log.Printf("Scheduler service started - Code check interval: %ds, Cleanup interval: %ds",
+	zap.S().Infof("Scheduler service started - Code check interval: %ds, Cleanup interval: %ds",
 		s.cfg.CodeCheckInterval, s.cfg.AssignmentCleanupInterval)
 }
 
 // Stop 停止定时任务
 func (s *SchedulerService) Stop() {
-	log.Println("Stopping scheduler service...")
+	zap.S().Info("Stopping scheduler service...")
 
 	close(s.stopChan)
 
@@ -77,7 +77,7 @@ func (s *SchedulerService) Stop() {
 		s.cleanupTicker.Stop()
 	}
 
-	log.Println("Scheduler service stopped")
+	zap.S().Info("Scheduler service stopped")
 }
 
 // runCodeCheckTask 运行验证码检查任务
@@ -111,7 +111,7 @@ func (s *SchedulerService) checkPendingCodes() {
 	// 查找所有状态为 "pending" 的分配记录
 	assignments, err := s.findPendingAssignments(ctx)
 	if err != nil {
-		log.Printf("Error finding pending assignments: %v", err)
+		zap.S().Errorf("Error finding pending assignments: %v", err)
 		return
 	}
 
@@ -119,7 +119,7 @@ func (s *SchedulerService) checkPendingCodes() {
 		return
 	}
 
-	log.Printf("Found %d pending assignments to check for codes", len(assignments))
+	zap.S().Infof("Found %d pending assignments to check for codes", len(assignments))
 
 	for _, assignment := range assignments {
 		s.processAssignment(ctx, assignment)
@@ -183,7 +183,7 @@ func (s *SchedulerService) markAssignmentAsExpired(ctx context.Context, assignme
 	err := s.assignmentRepo.Update(ctx, tx, assignment)
 	if err != nil {
 		tx.Rollback()
-		log.Printf("Error marking assignment %d as expired: %v", assignment.ID, err)
+		zap.S().Errorf("Error marking assignment %d as expired: %v", assignment.ID, err)
 		return
 	}
 
@@ -196,7 +196,7 @@ func (s *SchedulerService) markAssignmentAsExpired(ctx context.Context, assignme
 		currentBalance, err := s.transactionRepo.GetBalance(ctx, customerID)
 		if err != nil {
 			tx.Rollback()
-			log.Printf("Error getting balance for customer %d: %v", customerID, err)
+			zap.S().Errorf("Error getting balance for customer %d: %v", customerID, err)
 			return
 		}
 
@@ -206,7 +206,7 @@ func (s *SchedulerService) markAssignmentAsExpired(ctx context.Context, assignme
 		balanceAfterFloat := float32(currentBalance + refundAmount)
 		transactionType := "3" // 拉号-回退
 		assignmentID := assignment.ID
-		notes := fmt.Sprintf("手机号过期退款: %s (分配ID: %d)", 
+		notes := fmt.Sprintf("手机号过期退款: %s (分配ID: %d)",
 			getPhoneNumber(assignment.PhoneNumber), assignment.ID)
 
 		refundTx := &domain.Transaction{
@@ -223,7 +223,7 @@ func (s *SchedulerService) markAssignmentAsExpired(ctx context.Context, assignme
 		err = s.transactionRepo.Create(ctx, refundTx)
 		if err != nil {
 			tx.Rollback()
-			log.Printf("Error creating refund transaction for assignment %d: %v", assignment.ID, err)
+			zap.S().Errorf("Error creating refund transaction for assignment %d: %v", assignment.ID, err)
 			return
 		}
 
@@ -231,28 +231,28 @@ func (s *SchedulerService) markAssignmentAsExpired(ctx context.Context, assignme
 		customer, err := s.customerRepo.FindByID(ctx, customerID)
 		if err != nil {
 			tx.Rollback()
-			log.Printf("Error finding customer %d: %v", customerID, err)
+			zap.S().Errorf("Error finding customer %d: %v", customerID, err)
 			return
 		}
 		customer.Balance = currentBalance + refundAmount
 		err = s.customerRepo.Update(ctx, customer)
 		if err != nil {
 			tx.Rollback()
-			log.Printf("Error updating customer balance for customer %d: %v", customerID, err)
+			zap.S().Errorf("Error updating customer balance for customer %d: %v", customerID, err)
 			return
 		}
 
-		log.Printf("Assignment %d marked as expired and refunded %.2f to customer %d", 
+		zap.S().Infof("Assignment %d marked as expired and refunded %.2f to customer %d",
 			assignment.ID, refundAmount, customerID)
 	} else {
-		log.Printf("Assignment %d marked as expired (no refund needed)", assignment.ID)
+		zap.S().Infof("Assignment %d marked as expired (no refund needed)", assignment.ID)
 	}
 
 	// 提交事务
 	if err := tx.Commit().Error; err != nil {
-		log.Printf("Error committing transaction for expired assignment %d: %v", assignment.ID, err)
+		zap.S().Errorf("Error committing transaction for expired assignment %d: %v", assignment.ID, err)
 	} else {
-		log.Printf("Assignment %d marked as expired due to timeout", assignment.ID)
+		zap.S().Infof("Assignment %d marked as expired due to timeout", assignment.ID)
 	}
 
 	// 释放手机号
@@ -273,19 +273,19 @@ func getPhoneNumber(phone *string) string {
 func (s *SchedulerService) tryGetCode(ctx context.Context, assignment *domain.PhoneAssignment) {
 	// 根据assignment中的ProviderID获取provider对象
 	if assignment.ProviderID == nil {
-		log.Printf("Assignment %d has no provider ID, cannot get code", assignment.ID)
+		zap.S().Warnf("Assignment %d has no provider ID, cannot get code", assignment.ID)
 		return
 	}
 
 	// 通过ProviderID查询Provider信息获取ProviderCode
 	providerInfo, err := s.providerRepo.FindByID(ctx, int(*assignment.ProviderID))
 	if err != nil {
-		log.Printf("Error finding provider %d for assignment %d: %v", *assignment.ProviderID, assignment.ID, err)
+		zap.S().Errorf("Error finding provider %d for assignment %d: %v", *assignment.ProviderID, assignment.ID, err)
 		return
 	}
 
 	if providerInfo.Code == nil {
-		log.Printf("Provider %d has no code", *assignment.ProviderID)
+		zap.S().Warnf("Provider %d has no code", *assignment.ProviderID)
 		return
 	}
 
@@ -293,7 +293,7 @@ func (s *SchedulerService) tryGetCode(ctx context.Context, assignment *domain.Ph
 	providerManager := global.GetProviderManager()
 	providerInstance, err := providerManager.GetProviderByCode(*providerInfo.Code)
 	if err != nil {
-		log.Printf("Error getting provider instance for code %s: %v", *providerInfo.Code, err)
+		zap.S().Errorf("Error getting provider instance for code %s: %v", *providerInfo.Code, err)
 		return
 	}
 
@@ -323,10 +323,10 @@ func (s *SchedulerService) tryGetCode(ctx context.Context, assignment *domain.Ph
 		// 更新获取次数
 		err = s.assignmentRepo.Update(ctx, s.db, assignment)
 		if err != nil {
-			log.Printf("Error updating fetch count for assignment %d: %v", assignment.ID, err)
+			zap.S().Errorf("Error updating fetch count for assignment %d: %v", assignment.ID, err)
 		}
 
-		log.Printf("Failed to get code for assignment %d (phone: %s), attempt %d: %v",
+		zap.S().Warnf("Failed to get code for assignment %d (phone: %s), attempt %d: %v",
 			assignment.ID, *assignment.PhoneNumber, *assignment.FetchCount, err)
 		return
 	}
@@ -354,9 +354,9 @@ func (s *SchedulerService) updateAssignmentWithCode(ctx context.Context, assignm
 
 	err := s.assignmentRepo.Update(ctx, s.db, assignment)
 	if err != nil {
-		log.Printf("Error updating assignment %d with code: %v", assignment.ID, err)
+		zap.S().Errorf("Error updating assignment %d with code: %v", assignment.ID, err)
 	} else {
-		log.Printf("Assignment %d successfully updated with verification code", assignment.ID)
+		zap.S().Infof("Assignment %d successfully updated with verification code", assignment.ID)
 	}
 
 	// 释放手机号
@@ -373,19 +373,19 @@ func (s *SchedulerService) releasePhoneNumber(ctx context.Context, assignment *d
 
 	// 获取provider实例
 	if assignment.ProviderID == nil {
-		log.Printf("Assignment %d has no provider ID, cannot release phone", assignment.ID)
+		zap.S().Warnf("Assignment %d has no provider ID, cannot release phone", assignment.ID)
 		return
 	}
 
 	// 通过ProviderID查询Provider信息获取ProviderCode
 	providerInfo, err := s.providerRepo.FindByID(ctx, int(*assignment.ProviderID))
 	if err != nil {
-		log.Printf("Error finding provider %d for assignment %d to release phone: %v", *assignment.ProviderID, assignment.ID, err)
+		zap.S().Errorf("Error finding provider %d for assignment %d to release phone: %v", *assignment.ProviderID, assignment.ID, err)
 		return
 	}
 
 	if providerInfo.Code == nil {
-		log.Printf("Provider %d has no code, cannot release phone for assignment %d", *assignment.ProviderID, assignment.ID)
+		zap.S().Warnf("Provider %d has no code, cannot release phone for assignment %d", *assignment.ProviderID, assignment.ID)
 		return
 	}
 
@@ -393,7 +393,7 @@ func (s *SchedulerService) releasePhoneNumber(ctx context.Context, assignment *d
 	providerManager := global.GetProviderManager()
 	providerInstance, err := providerManager.GetProviderByCode(*providerInfo.Code)
 	if err != nil {
-		log.Printf("Error getting provider instance for code %s to release phone: %v", *providerInfo.Code, err)
+		zap.S().Errorf("Error getting provider instance for code %s to release phone: %v", *providerInfo.Code, err)
 		return
 	}
 
@@ -410,16 +410,16 @@ func (s *SchedulerService) releasePhoneNumber(ctx context.Context, assignment *d
 
 	if extId != nil {
 		if err := providerInstance.ReleasePhone(releaseCtx, *assignment.PhoneNumber, *extId); err != nil {
-			log.Printf("Error releasing phone %s (extId: %s) for assignment %d: %v", *assignment.PhoneNumber, *extId, assignment.ID, err)
+			zap.S().Warnf("Error releasing phone %s (extId: %s) for assignment %d: %v", *assignment.PhoneNumber, *extId, assignment.ID, err)
 		} else {
-			log.Printf("Successfully released phone %s (extId: %s) for assignment %d", *assignment.PhoneNumber, *extId, assignment.ID)
+			zap.S().Infof("Successfully released phone %s (extId: %s) for assignment %d", *assignment.PhoneNumber, *extId, assignment.ID)
 		}
 	} else {
 		// 如果没有 extId，尝试使用 phoneNumber（某些 provider 可能支持）
 		if err := providerInstance.ReleasePhone(releaseCtx, *assignment.PhoneNumber); err != nil {
-			log.Printf("Error releasing phone %s (no extId) for assignment %d: %v", *assignment.PhoneNumber, assignment.ID, err)
+			zap.S().Warnf("Error releasing phone %s (no extId) for assignment %d: %v", *assignment.PhoneNumber, assignment.ID, err)
 		} else {
-			log.Printf("Successfully released phone %s (no extId) for assignment %d", *assignment.PhoneNumber, assignment.ID)
+			zap.S().Infof("Successfully released phone %s (no extId) for assignment %d", *assignment.PhoneNumber, assignment.ID)
 		}
 	}
 }
@@ -435,7 +435,7 @@ func (s *SchedulerService) cleanupExpiredAssignments() {
 	status := "pending"
 	err := s.db.WithContext(ctx).Where("status = ? AND created_at < ?", status, cutoffTime).Find(&expiredAssignments).Error
 	if err != nil {
-		log.Printf("Error finding expired assignments for cleanup: %v", err)
+		zap.S().Errorf("Error finding expired assignments for cleanup: %v", err)
 		return
 	}
 
@@ -443,7 +443,7 @@ func (s *SchedulerService) cleanupExpiredAssignments() {
 		return
 	}
 
-	log.Printf("Found %d expired assignments to cleanup", len(expiredAssignments))
+	zap.S().Infof("Found %d expired assignments to cleanup", len(expiredAssignments))
 
 	for _, assignment := range expiredAssignments {
 		s.markAssignmentAsExpired(ctx, assignment)

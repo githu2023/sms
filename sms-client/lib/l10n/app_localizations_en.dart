@@ -247,4 +247,115 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get retryGetCode => 'Retry';
+
+  @override
+  String get requestCount => 'Request Count';
+
+  @override
+  String get requestCountHelper => 'Maximum 10 numbers per request';
+
+  @override
+  String get totalCostLabel => 'Total Cost';
+
+  @override
+  String get remainingBalanceLabel => 'Remaining Balance';
+
+  @override
+  String get successCountLabel => 'Success';
+
+  @override
+  String get failedCountLabel => 'Failed';
+
+  @override
+  String get pendingCountLabel => 'Pending';
+
+  @override
+  String get countryCode => 'Country Code';
+
+  @override
+  String get providerLabel => 'Provider';
+
+  @override
+  String get validUntilLabel => 'Valid Until';
+
+  @override
+  String get codesSummary => 'Verification Summary';
+
+  @override
+  String get enterPhonesHint => 'Enter multiple phone numbers separated by newline or comma';
+
+  @override
+  String get enterPhonesHelper => 'Up to 10 phone numbers per request';
+
+  @override
+  String get invalidPhoneInput => 'Please enter between 1 and 10 valid phone numbers';
+
+  @override
+  String get noCodesYet => 'No verification codes yet. Keep polling if status is pending.';
+
+  @override
+  String get messageLabel => 'Message';
+
+  @override
+  String get receivedAtLabel => 'Received At';
+
+  @override
+  String get statusSuccess => 'Success';
+
+  @override
+  String get statusPending => 'Pending';
+
+  @override
+  String get statusFailed => 'Failed';
+
+  @override
+  String get getCodeInstructions => 'Enter up to 10 phone numbers. If the status is pending, continue polling this interface.';
+
+  @override
+  String get currentPasswordLabel => 'Current Password';
+
+  @override
+  String get newPasswordLabel => 'New Password';
+
+  @override
+  String get confirmPasswordLabel => 'Confirm Password';
+
+  @override
+  String get passwordTooShort => 'Password must be at least 6 characters';
+
+  @override
+  String get passwordUnchanged => 'New password must be different from current password';
+
+  @override
+  String get passwordMismatch => 'Passwords do not match';
+
+  @override
+  String get changePasswordSuccess => 'Password changed successfully';
+
+  @override
+  String get changePasswordFailed => 'Failed to change password';
+
+  @override
+  String get addWhitelistSuccess => 'Whitelist entry added';
+
+  @override
+  String get addWhitelistFailed => 'Failed to add whitelist entry';
+
+  @override
+  String get deleteWhitelistSuccess => 'Whitelist entry deleted';
+
+  @override
+  String get deleteWhitelistFailed => 'Failed to delete whitelist entry';
+
+  @override
+  String get deleteWhitelistConfirm => 'Delete the following IP?';
+
+  @override
+  String get notesOptional => 'Notes (optional)';
+
+  @override
+  String get ipAddressRequired => 'Please enter IP address or CIDR';
+
+  @override
+  String get invalidIpFormat => 'Invalid IP or CIDR format';
 }

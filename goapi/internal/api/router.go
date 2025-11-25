@@ -8,6 +8,7 @@ import (
 	"sms-platform/goapi/internal/repository"
 	"sms-platform/goapi/internal/service"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -21,6 +22,15 @@ func NewRouter(cfg config.Config) *gin.Engine { // Pass config to router
 	router.Use(gin.Logger())   // Standard logger
 	router.Use(gin.Recovery()) // Recover from panics
 	router.Use(middleware.RequestID())
+	router.Use(cors.New(cors.Config{
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders: []string{
+			"Content-Length",
+		},
+		AllowCredentials: true,
+	}))
 
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
@@ -93,6 +103,7 @@ func NewRouter(cfg config.Config) *gin.Engine { // Pass config to router
 			clientAuth.POST("/get_code", phoneHandler.GetCode)              // New
 			clientAuth.GET("/phone_status", phoneHandler.GetPhoneStatus)    // New
 			clientAuth.GET("/assignments", assignmentHandler.GetAssignments)
+			clientAuth.GET("/assignments/recent", assignmentHandler.GetRecentAssignments)
 			clientAuth.GET("/assignments/statistics", assignmentHandler.GetCostStatistics)
 			// 白名单相关接口
 			clientAuth.GET("/whitelist", whitelistHandler.ListWhitelists)
@@ -116,6 +127,7 @@ func NewRouter(cfg config.Config) *gin.Engine { // Pass config to router
 			apiAuth.POST("/get_code", phoneHandler.GetCode)                  // New
 			apiAuth.GET("/phone_status", phoneHandler.GetPhoneStatus)        // New
 			apiAuth.GET("/assignments", assignmentHandler.GetAssignments)
+			apiAuth.GET("/assignments/recent", assignmentHandler.GetRecentAssignments)
 			apiAuth.GET("/assignments/statistics", assignmentHandler.GetCostStatistics)
 			// 白名单相关接口
 			apiAuth.GET("/whitelist", whitelistHandler.ListWhitelists)

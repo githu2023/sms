@@ -2,11 +2,14 @@ package handler
 
 import (
 	"errors"
+	"strconv"
+	"time"
+
 	"sms-platform/goapi/internal/common"
+	"sms-platform/goapi/internal/domain"
 	"sms-platform/goapi/internal/dto"
 	"sms-platform/goapi/internal/service"
 	"sms-platform/goapi/internal/utils"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -104,56 +107,7 @@ func (h *AssignmentHandler) GetAssignments(c *gin.Context) {
 	// 转换领域模型为DTO
 	items := make([]dto.AssignmentHistoryItem, len(assignments))
 	for i, assignment := range assignments {
-		// Convert pointer fields to values with defaults
-		phoneNumber := ""
-		if assignment.PhoneNumber != nil {
-			phoneNumber = *assignment.PhoneNumber
-		}
-
-		verificationCode := ""
-		if assignment.VerificationCode != nil {
-			verificationCode = *assignment.VerificationCode
-		}
-
-		// Convert string status to int
-		status := 1 // default pending
-		if assignment.Status != nil {
-			switch *assignment.Status {
-			case "pending":
-				status = 1
-			case "completed":
-				status = 2
-			case "expired":
-				status = 3
-			case "failed":
-				status = 4
-			}
-		}
-
-		// Use MerchantFee as cost
-		cost := 0.0
-		if assignment.MerchantFee != nil {
-			cost = float64(*assignment.MerchantFee)
-		}
-
-		// Use BusinessCode as business type
-		businessType := ""
-		if assignment.BusinessCode != "" {
-			businessType = assignment.BusinessCode
-		}
-
-		items[i] = dto.AssignmentHistoryItem{
-			ID:               assignment.ID,
-			PhoneNumber:      phoneNumber,
-			BusinessType:     businessType,
-			CardType:         "virtual", // Default since CardType field doesn't exist in new model
-			VerificationCode: verificationCode,
-			Cost:             cost,
-			Status:           status,
-			ExpiresAt:        nil, // ExpiresAt field doesn't exist in new model
-			CreatedAt:        assignment.CreatedAt,
-			ProviderName:     "", // Need to lookup provider name from ID
-		}
+		items[i] = buildAssignmentHistoryItem(assignment)
 	}
 
 	common.RespondSuccess(c, dto.AssignmentHistoryResponse{
@@ -233,4 +187,86 @@ func (h *AssignmentHandler) GetCostStatistics(c *gin.Context) {
 		TotalCost:  stats.TotalCost,
 		TotalCount: stats.TotalCount,
 	})
+}
+
+// GetRecentAssignments 返回最近的手机号获取记录
+func (h *AssignmentHandler) GetRecentAssignments(c *gin.Context) {
+	limit := 5
+	if limitStr := c.Query("limit"); limitStr != "" {
+		parsedLimit, err := strconv.Atoi(limitStr)
+		if err != nil || parsedLimit <= 0 || parsedLimit > 50 {
+			common.RespondErrorWithMsg(c, common.CodeBadRequest, "limit 需要是 1-50 的整数")
+			return
+		}
+		limit = parsedLimit
+	}
+
+	customerIDInt64, ok := utils.RequireCustomerID(c)
+	if !ok {
+		return
+	}
+
+	assignments, err := h.assignmentService.GetRecentAssignments(c.Request.Context(), customerIDInt64, limit)
+	if err != nil {
+		common.RespondErrorWithMsg(c, common.CodeInternalError, "获取最近分配记录失败: "+err.Error())
+		return
+	}
+
+	items := make([]dto.AssignmentHistoryItem, len(assignments))
+	for i, assignment := range assignments {
+		items[i] = buildAssignmentHistoryItem(assignment)
+	}
+
+	common.RespondSuccess(c, dto.RecentAssignmentsResponse{
+		Items: items,
+	})
+}
+
+func buildAssignmentHistoryItem(assignment *domain.PhoneAssignment) dto.AssignmentHistoryItem {
+	phoneNumber := ""
+	if assignment.PhoneNumber != nil {
+		phoneNumber = *assignment.PhoneNumber
+	}
+
+	verificationCode := ""
+	if assignment.VerificationCode != nil {
+		verificationCode = *assignment.VerificationCode
+	}
+
+	status := 1 // default pending
+	if assignment.Status != nil {
+		switch *assignment.Status {
+		case "pending":
+			status = 1
+		case "completed":
+			status = 2
+		case "expired":
+			status = 3
+		case "failed":
+			status = 4
+		}
+	}
+
+	cost := 0.0
+	if assignment.MerchantFee != nil {
+		cost = float64(*assignment.MerchantFee)
+	}
+
+	businessType := assignment.BusinessCode
+	providerName := ""
+	if assignment.Provider != nil && assignment.Provider.Name != nil {
+		providerName = *assignment.Provider.Name
+	}
+
+	return dto.AssignmentHistoryItem{
+		ID:               assignment.ID,
+		PhoneNumber:      phoneNumber,
+		BusinessType:     businessType,
+		CardType:         "virtual",
+		VerificationCode: verificationCode,
+		Cost:             cost,
+		Status:           status,
+		CreatedAt:        assignment.CreatedAt,
+		ProviderName:     providerName,
+	}
 }

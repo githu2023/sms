@@ -62,8 +62,7 @@ import 'app_localizations_zh.dart';
 /// be consistent with the languages listed in the AppLocalizations.supportedLocales
 /// property.
 abstract class AppLocalizations {
-  AppLocalizations(String locale)
-    : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+  AppLocalizations(String locale) : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -71,8 +70,7 @@ abstract class AppLocalizations {
     return Localizations.of<AppLocalizations>(context, AppLocalizations);
   }
 
-  static const LocalizationsDelegate<AppLocalizations> delegate =
-      _AppLocalizationsDelegate();
+  static const LocalizationsDelegate<AppLocalizations> delegate = _AppLocalizationsDelegate();
 
   /// A list of this localizations delegate along with the default localizations
   /// delegates.
@@ -84,18 +82,17 @@ abstract class AppLocalizations {
   /// Additional delegates can be added by appending to this list in
   /// MaterialApp. This list does not have to be used at all if a custom list
   /// of delegates is preferred or required.
-  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
-      <LocalizationsDelegate<dynamic>>[
-        delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ];
+  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates = <LocalizationsDelegate<dynamic>>[
+    delegate,
+    GlobalMaterialLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+  ];
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
     Locale('en'),
-    Locale('zh'),
+    Locale('zh')
   ];
 
   /// No description provided for @appTitle.
@@ -577,10 +574,231 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'重试获取'**
   String get retryGetCode;
+
+  /// No description provided for @requestCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'请求数量'**
+  String get requestCount;
+
+  /// No description provided for @requestCountHelper.
+  ///
+  /// In zh, this message translates to:
+  /// **'每次最多10个手机号'**
+  String get requestCountHelper;
+
+  /// No description provided for @totalCostLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'总费用'**
+  String get totalCostLabel;
+
+  /// No description provided for @remainingBalanceLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'剩余余额'**
+  String get remainingBalanceLabel;
+
+  /// No description provided for @successCountLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'成功数量'**
+  String get successCountLabel;
+
+  /// No description provided for @failedCountLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'失败数量'**
+  String get failedCountLabel;
+
+  /// No description provided for @pendingCountLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待数量'**
+  String get pendingCountLabel;
+
+  /// No description provided for @countryCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'国家/地区'**
+  String get countryCode;
+
+  /// No description provided for @providerLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务商'**
+  String get providerLabel;
+
+  /// No description provided for @validUntilLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'有效期至'**
+  String get validUntilLabel;
+
+  /// No description provided for @codesSummary.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证码统计'**
+  String get codesSummary;
+
+  /// No description provided for @enterPhonesHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'支持换行或逗号分隔输入多个手机号'**
+  String get enterPhonesHint;
+
+  /// No description provided for @enterPhonesHelper.
+  ///
+  /// In zh, this message translates to:
+  /// **'最多同时查询10个手机号'**
+  String get enterPhonesHelper;
+
+  /// No description provided for @invalidPhoneInput.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入1-10个有效手机号'**
+  String get invalidPhoneInput;
+
+  /// No description provided for @noCodesYet.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂未获取到验证码，若为等待状态请继续轮询'**
+  String get noCodesYet;
+
+  /// No description provided for @messageLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息'**
+  String get messageLabel;
+
+  /// No description provided for @receivedAtLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'接收时间'**
+  String get receivedAtLabel;
+
+  /// No description provided for @statusSuccess.
+  ///
+  /// In zh, this message translates to:
+  /// **'成功'**
+  String get statusSuccess;
+
+  /// No description provided for @statusPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待'**
+  String get statusPending;
+
+  /// No description provided for @statusFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'失败'**
+  String get statusFailed;
+
+  /// No description provided for @getCodeInstructions.
+  ///
+  /// In zh, this message translates to:
+  /// **'可同时查询最多10个手机号，若状态为等待请继续轮询此接口。'**
+  String get getCodeInstructions;
+
+  /// No description provided for @currentPasswordLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前密码'**
+  String get currentPasswordLabel;
+
+  /// No description provided for @newPasswordLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'新密码'**
+  String get newPasswordLabel;
+
+  /// No description provided for @confirmPasswordLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认新密码'**
+  String get confirmPasswordLabel;
+
+  /// No description provided for @passwordTooShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'密码至少需要6位'**
+  String get passwordTooShort;
+
+  /// No description provided for @passwordUnchanged.
+  ///
+  /// In zh, this message translates to:
+  /// **'新密码不能与旧密码相同'**
+  String get passwordUnchanged;
+
+  /// No description provided for @passwordMismatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'两次输入的密码不一致'**
+  String get passwordMismatch;
+
+  /// No description provided for @changePasswordSuccess.
+  ///
+  /// In zh, this message translates to:
+  /// **'密码修改成功'**
+  String get changePasswordSuccess;
+
+  /// No description provided for @changePasswordFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'密码修改失败'**
+  String get changePasswordFailed;
+
+  /// No description provided for @addWhitelistSuccess.
+  ///
+  /// In zh, this message translates to:
+  /// **'白名单添加成功'**
+  String get addWhitelistSuccess;
+
+  /// No description provided for @addWhitelistFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'白名单添加失败'**
+  String get addWhitelistFailed;
+
+  /// No description provided for @deleteWhitelistSuccess.
+  ///
+  /// In zh, this message translates to:
+  /// **'白名单删除成功'**
+  String get deleteWhitelistSuccess;
+
+  /// No description provided for @deleteWhitelistFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'白名单删除失败'**
+  String get deleteWhitelistFailed;
+
+  /// No description provided for @deleteWhitelistConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认删除以下IP？'**
+  String get deleteWhitelistConfirm;
+
+  /// No description provided for @notesOptional.
+  ///
+  /// In zh, this message translates to:
+  /// **'备注（可选）'**
+  String get notesOptional;
+
+  /// No description provided for @ipAddressRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入IP地址或CIDR网段'**
+  String get ipAddressRequired;
+
+  /// No description provided for @invalidIpFormat.
+  ///
+  /// In zh, this message translates to:
+  /// **'IP地址或CIDR格式不正确'**
+  String get invalidIpFormat;
 }
 
-class _AppLocalizationsDelegate
-    extends LocalizationsDelegate<AppLocalizations> {
+class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
   const _AppLocalizationsDelegate();
 
   @override
@@ -589,26 +807,25 @@ class _AppLocalizationsDelegate
   }
 
   @override
-  bool isSupported(Locale locale) =>
-      <String>['en', 'zh'].contains(locale.languageCode);
+  bool isSupported(Locale locale) => <String>['en', 'zh'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
 }
 
 AppLocalizations lookupAppLocalizations(Locale locale) {
+
+
   // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
-    case 'en':
-      return AppLocalizationsEn();
-    case 'zh':
-      return AppLocalizationsZh();
+    case 'en': return AppLocalizationsEn();
+    case 'zh': return AppLocalizationsZh();
   }
 
   throw FlutterError(
     'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
     'an issue with the localizations generation tool. Please file an issue '
     'on GitHub with a reproducible sample app and the gen-l10n configuration '
-    'that was used.',
+    'that was used.'
   );
 }

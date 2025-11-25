@@ -38,9 +38,9 @@ class _LoginPageState extends State<LoginPage> {
     if (!mounted) return;
 
     if (success) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomePage()),
-      );
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -91,7 +91,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  
+
                   // Logo and title
                   Icon(
                     Icons.sms,
@@ -105,7 +105,7 @@ class _LoginPageState extends State<LoginPage> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 48),
-                  
+
                   // Username field
                   TextFormField(
                     controller: _usernameController,
@@ -123,7 +123,7 @@ class _LoginPageState extends State<LoginPage> {
                     enabled: !authProvider.isLoading,
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Password field
                   TextFormField(
                     controller: _passwordController,
@@ -154,40 +154,44 @@ class _LoginPageState extends State<LoginPage> {
                     enabled: !authProvider.isLoading,
                   ),
                   const SizedBox(height: 24),
-                  
+
                   // Login button
                   ElevatedButton(
                     onPressed: authProvider.isLoading ? null : _handleLogin,
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
-                    child: authProvider.isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    child:
+                        authProvider.isLoading
+                            ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                            : Text(
+                              l10n.login,
+                              style: const TextStyle(fontSize: 16),
                             ),
-                          )
-                        : Text(
-                            l10n.login,
-                            style: const TextStyle(fontSize: 16),
-                          ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Register link
                   TextButton(
-                    onPressed: authProvider.isLoading
-                        ? null
-                        : () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const RegisterPage(),
-                              ),
-                            );
-                          },
+                    onPressed:
+                        authProvider.isLoading
+                            ? null
+                            : () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const RegisterPage(),
+                                ),
+                              );
+                            },
                     child: Text(l10n.noAccountRegister),
                   ),
                 ],

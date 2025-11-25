@@ -4,7 +4,7 @@ import '../core/api_client.dart';
 
 class AuthProvider extends ChangeNotifier {
   final ApiClient _apiClient = ApiClient();
-  
+
   User? _user;
   bool _isLoading = false;
   String? _error;
@@ -22,9 +22,14 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final response = await _apiClient.login(username, password);
-      
+
       if (response.success && response.data != null) {
-        _user = response.data;
+        final profile = await _apiClient.getUserProfile();
+        if (profile.success && profile.data != null) {
+          _user = profile.data;
+        } else {
+          _user = response.data;
+        }
         _isLoading = false;
         notifyListeners();
         return true;
@@ -50,7 +55,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final response = await _apiClient.register(username, email, password);
-      
+
       if (response.success) {
         _isLoading = false;
         notifyListeners();
@@ -76,16 +81,36 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Load user profile
-  Future<void> loadUserProfile() async {
+  // Load user profile - 用于启动时恢复登录状态
+  Future<bool> loadUserProfile() async {
     try {
+      // 检查是否有保存的 token
+      final token = await _apiClient.getToken();
+      if (token == null || token.isEmpty) {
+        _user = null;
+        return false;
+      }
+
+      // 尝试获取用户信息
       final response = await _apiClient.getUserProfile();
       if (response.success && response.data != null) {
         _user = response.data;
         notifyListeners();
+        return true;
+      } else {
+        // Token 无效，清除
+        await _apiClient.clearToken();
+        _user = null;
+        notifyListeners();
+        return false;
       }
     } catch (e) {
       debugPrint('Failed to load user profile: $e');
+      // 出错时清除状态
+      await _apiClient.clearToken();
+      _user = null;
+      notifyListeners();
+      return false;
     }
   }
 

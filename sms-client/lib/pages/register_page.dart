@@ -42,17 +42,19 @@ class _RegisterPageState extends State<RegisterPage> {
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.registerTitle),
+        const SnackBar(
+          content: Text('注册成功！请登录'),
           backgroundColor: Colors.green,
         ),
       );
       Navigator.of(context).pop();
     } else {
+      final errorMsg = authProvider.error ?? '注册失败';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(authProvider.error ?? 'Registration failed'),
+          content: Text(errorMsg),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
         ),
       );
     }
@@ -64,9 +66,7 @@ class _RegisterPageState extends State<RegisterPage> {
     final authProvider = context.watch<AuthProvider>();
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.register),
-      ),
+      appBar: AppBar(title: Text(l10n.register)),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -89,7 +89,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
-                  
+
                   // Username field
                   TextFormField(
                     controller: _usernameController,
@@ -110,7 +110,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     enabled: !authProvider.isLoading,
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Email field
                   TextFormField(
                     controller: _emailController,
@@ -132,7 +132,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     enabled: !authProvider.isLoading,
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Password field
                   TextFormField(
                     controller: _passwordController,
@@ -158,15 +158,15 @@ class _RegisterPageState extends State<RegisterPage> {
                       if (value == null || value.isEmpty) {
                         return l10n.passwordRequired;
                       }
-                      if (value.length < 6) {
-                        return 'Password must be at least 6 characters';
+                      if (value.length < 8) {
+                        return '密码至少需要 8 位字符';
                       }
                       return null;
                     },
                     enabled: !authProvider.isLoading,
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Confirm password field
                   TextFormField(
                     controller: _confirmPasswordController,
@@ -197,36 +197,40 @@ class _RegisterPageState extends State<RegisterPage> {
                     enabled: !authProvider.isLoading,
                   ),
                   const SizedBox(height: 24),
-                  
+
                   // Register button
                   ElevatedButton(
                     onPressed: authProvider.isLoading ? null : _handleRegister,
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
-                    child: authProvider.isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    child:
+                        authProvider.isLoading
+                            ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                            : Text(
+                              l10n.register,
+                              style: const TextStyle(fontSize: 16),
                             ),
-                          )
-                        : Text(
-                            l10n.register,
-                            style: const TextStyle(fontSize: 16),
-                          ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Login link
                   TextButton(
-                    onPressed: authProvider.isLoading
-                        ? null
-                        : () {
-                            Navigator.of(context).pop();
-                          },
+                    onPressed:
+                        authProvider.isLoading
+                            ? null
+                            : () {
+                              Navigator.of(context).pop();
+                            },
                     child: Text(l10n.hasAccount),
                   ),
                 ],

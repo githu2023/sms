@@ -1,13 +1,19 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/api_response.dart';
-import '../models/user.dart';
-import '../models/business_type.dart';
 import '../models/assignment.dart';
+import '../models/assigned_phone.dart';
+import '../models/business_type.dart';
+import '../models/phone_assignment_result.dart';
+import '../models/user.dart';
+import '../models/verification_code_entry.dart';
+import '../models/verification_code_result.dart';
+import '../models/whitelist.dart';
 
 class ApiClient {
-  static const String baseUrl = 'http://localhost:8080';
+  static const String baseUrl = 'http://localhost:6060';
   static const String tokenKey = 'auth_token';
 
   String? _token;
@@ -36,9 +42,7 @@ class ApiClient {
 
   // Build headers
   Future<Map<String, String>> _buildHeaders({bool needsAuth = true}) async {
-    final headers = {
-      'Content-Type': 'application/json',
-    };
+    final headers = {'Content-Type': 'application/json'};
 
     if (needsAuth) {
       final token = await getToken();
@@ -56,6 +60,18 @@ class ApiClient {
     T Function(dynamic)? fromJson,
   ) {
     try {
+      // 先检查响应体是否为空
+      if (response.body.isEmpty) {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          return ApiResponse.success(message: 'Success');
+        } else {
+          return ApiResponse.error(
+            message: 'Empty response',
+            code: response.statusCode,
+          );
+        }
+      }
+
       final jsonData = json.decode(utf8.decode(response.bodyBytes));
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -67,10 +83,20 @@ class ApiClient {
         );
       }
     } catch (e) {
-      return ApiResponse.error(
-        message: 'Failed to parse response: $e',
-        code: response.statusCode,
-      );
+      // 打印原始响应以便调试
+      debugPrint('Response parsing error: $e');
+      debugPrint('Status code: ${response.statusCode}');
+      debugPrint('Response body: ${response.body}');
+
+      // 更友好的错误提示
+      String errorMsg = '服务器响应格式错误';
+      if (e.toString().contains('FormatException')) {
+        errorMsg = '服务器返回了无效的数据格式';
+      } else if (e.toString().contains('Unexpected end of JSON')) {
+        errorMsg = '服务器响应不完整，请稍后重试';
+      }
+
+      return ApiResponse.error(message: errorMsg, code: response.statusCode);
     }
   }
 
@@ -83,6 +109,9 @@ class ApiClient {
   }) async {
     try {
       final headers = await _buildHeaders(needsAuth: needsAuth);
+      debugPrint('POST $baseUrl$endpoint');
+      debugPrint('Request body: ${json.encode(data)}');
+
       final response = await http.post(
         Uri.parse('$baseUrl$endpoint'),
         headers: headers,
@@ -91,7 +120,14 @@ class ApiClient {
 
       return _handleResponse(response, fromJson);
     } catch (e) {
-      return ApiResponse.error(message: 'Network error: $e');
+      debugPrint('Network error: $e');
+      // 判断是否是连接错误
+      if (e.toString().contains('SocketException') ||
+          e.toString().contains('Failed host lookup') ||
+          e.toString().contains('Connection refused')) {
+        return ApiResponse.error(message: '无法连接到服务器，请检查网络连接或服务器地址');
+      }
+      return ApiResponse.error(message: '网络错误: $e');
     }
   }
 
@@ -109,10 +145,17 @@ class ApiClient {
         uri = uri.replace(queryParameters: queryParams);
       }
 
+      debugPrint('GET $uri');
       final response = await http.get(uri, headers: headers);
       return _handleResponse(response, fromJson);
     } catch (e) {
-      return ApiResponse.error(message: 'Network error: $e');
+      debugPrint('Network error: $e');
+      if (e.toString().contains('SocketException') ||
+          e.toString().contains('Failed host lookup') ||
+          e.toString().contains('Connection refused')) {
+        return ApiResponse.error(message: '无法连接到服务器，请检查网络连接或服务器地址');
+      }
+      return ApiResponse.error(message: '网络错误: $e');
     }
   }
 
@@ -190,18 +233,15 @@ class ApiClient {
   ) async {
     return await post(
       '/client/v1/register',
-      {
-        'username': username,
-        'email': email,
-        'password': password,
-      },
-      fromJson: (data) => User(
-        id: data['user_id'].toString(),
-        username: data['username'] as String,
-        email: email,
-        balance: 0.0,
-        createdAt: DateTime.now(),
-      ),
+      {'username': username, 'email': email, 'password': password},
+      fromJson:
+          (data) => User(
+            id: data['user_id'].toString(),
+            username: data['username'] as String,
+            email: email,
+            balance: 0.0,
+            createdAt: DateTime.now(),
+          ),
     );
   }
 
@@ -222,67 +262,66 @@ class ApiClient {
     return await get(
       '/client/v1/business_types',
       fromJson: (data) {
-        final types = data['business_types'] as List;
+        // data 可能是数组或包含 business_types 的对象
+        List types;
+        if (data is List) {
+          types = data;
+        } else if (data is Map && data.containsKey('business_types')) {
+          types = data['business_types'] as List;
+        } else {
+          types = [];
+        }
         return types.map((e) => BusinessType.fromJson(e)).toList();
       },
     );
   }
 
   // Phone Assignment APIs
-  Future<ApiResponse<Map<String, dynamic>>> assignPhone({
+  Future<ApiResponse<PhoneAssignmentResult>> assignPhone({
     required String businessType,
     required String cardType,
     int count = 1, // 批量获取数量，默认1个
   }) async {
     return await post(
       '/client/v1/get_phone',
-      {
-        'business_type': businessType,
-        'card_type': cardType,
-        'count': count,
-      },
-      fromJson: (data) => data as Map<String, dynamic>,
+      {'business_type': businessType, 'card_type': cardType, 'count': count},
+      fromJson:
+          (data) =>
+              PhoneAssignmentResult.fromJson(data as Map<String, dynamic>),
       needsAuth: true,
     );
   }
 
   // Verification Code APIs
-  Future<ApiResponse<Map<String, dynamic>>> getVerificationCode({
+  Future<ApiResponse<VerificationCodeResult>> getVerificationCodes({
     required List<String> phoneNumbers, // 支持批量手机号
-    int timeout = 60,
   }) async {
     return await post(
       '/client/v1/get_code',
-      {
-        'phone_numbers': phoneNumbers,
-        'timeout': timeout,
-      },
-      fromJson: (data) => data as Map<String, dynamic>,
+      {'phone_numbers': phoneNumbers},
+      fromJson:
+          (data) =>
+              VerificationCodeResult.fromJson(data as Map<String, dynamic>),
       needsAuth: true,
     );
   }
 
   // 向后兼容：单个手机号获取验证码的便捷方法
-  Future<ApiResponse<String?>> getVerificationCodeSingle({
+  Future<ApiResponse<VerificationCodeEntry?>> getVerificationCodeSingle({
     required String phone,
-    int timeout = 60,
   }) async {
-    final response = await getVerificationCode(
-      phoneNumbers: [phone],
-      timeout: timeout,
-    );
-    
+    final response = await getVerificationCodes(phoneNumbers: [phone]);
+
     if (response.success && response.data != null) {
-      final codes = response.data!['codes'] as List?;
-      if (codes != null && codes.isNotEmpty) {
-        final codeInfo = codes.first as Map<String, dynamic>;
+      if (response.data!.codes.isNotEmpty) {
+        final entry = response.data!.codes.first;
         return ApiResponse.success(
-          data: codeInfo['code'] as String?,
+          data: entry,
           message: response.message ?? 'Success',
         );
       }
     }
-    
+
     return ApiResponse.error(
       message: response.message ?? 'Failed to get verification code',
       code: response.code,
@@ -290,7 +329,7 @@ class ApiClient {
   }
 
   // 向后兼容：单个手机号获取的便捷方法
-  Future<ApiResponse<String?>> assignPhoneSingle({
+  Future<ApiResponse<AssignedPhone?>> assignPhoneSingle({
     required String businessType,
     required String cardType,
   }) async {
@@ -299,18 +338,17 @@ class ApiClient {
       cardType: cardType,
       count: 1,
     );
-    
+
     if (response.success && response.data != null) {
-      final phones = response.data!['phones'] as List?;
-      if (phones != null && phones.isNotEmpty) {
-        final phoneInfo = phones.first as Map<String, dynamic>;
+      if (response.data!.phones.isNotEmpty) {
+        final phoneInfo = response.data!.phones.first;
         return ApiResponse.success(
-          data: phoneInfo['phone_number'] as String?,
+          data: phoneInfo,
           message: response.message ?? 'Success',
         );
       }
     }
-    
+
     return ApiResponse.error(
       message: response.message ?? 'Failed to assign phone',
       code: response.code,
@@ -324,10 +362,7 @@ class ApiClient {
   }) async {
     return await get(
       '/client/v1/assignments',
-      queryParams: {
-        'page': page.toString(),
-        'limit': limit.toString(),
-      },
+      queryParams: {'page': page.toString(), 'limit': limit.toString()},
       fromJson: (data) {
         final items = data['items'] as List;
         return items.map((e) => Assignment.fromJson(e)).toList();
@@ -348,14 +383,10 @@ class ApiClient {
     required String oldPassword,
     required String newPassword,
   }) async {
-    return await post(
-      '/client/v1/change_password',
-      {
-        'old_password': oldPassword,
-        'new_password': newPassword,
-      },
-      needsAuth: true,
-    );
+    return await post('/client/v1/password/change', {
+      'old_password': oldPassword,
+      'new_password': newPassword,
+    }, needsAuth: true);
   }
 
   // Phone Status API
@@ -364,7 +395,7 @@ class ApiClient {
   }) async {
     return await get(
       '/client/v1/phone_status',
-      queryParams: {'phone': phone},
+      queryParams: {'phone_number': phone},
       fromJson: (data) => data as Map<String, dynamic>,
     );
   }
@@ -386,39 +417,34 @@ class ApiClient {
   }
 
   // Whitelist APIs
-  Future<ApiResponse<List<Map<String, dynamic>>>> getWhitelists() async {
+  Future<ApiResponse<List<Whitelist>>> getWhitelists() async {
     return await get(
       '/client/v1/whitelist',
       fromJson: (data) {
-        final items = data as List;
-        return items.cast<Map<String, dynamic>>();
+        final items = data as List<dynamic>;
+        return items
+            .map((item) => Whitelist.fromJson(item as Map<String, dynamic>))
+            .toList();
       },
     );
   }
 
-  Future<ApiResponse<Map<String, dynamic>>> addWhitelist({
+  Future<ApiResponse<Whitelist>> addWhitelist({
     required String ipAddress,
     String? notes,
   }) async {
     return await post(
       '/client/v1/whitelist',
-      {
-        'ip_address': ipAddress,
-        if (notes != null) 'notes': notes,
-      },
-      fromJson: (data) => data as Map<String, dynamic>,
+      {'ip_address': ipAddress, if (notes != null) 'notes': notes},
+      fromJson: (data) => Whitelist.fromJson(data as Map<String, dynamic>),
       needsAuth: true,
     );
   }
 
-  Future<ApiResponse<void>> deleteWhitelist({
-    required String ipAddress,
-  }) async {
+  Future<ApiResponse<void>> deleteWhitelist({required String ipAddress}) async {
     return await delete(
       '/client/v1/whitelist',
-      data: {
-        'ip_address': ipAddress,
-      },
+      data: {'ip_address': ipAddress},
       needsAuth: true,
     );
   }

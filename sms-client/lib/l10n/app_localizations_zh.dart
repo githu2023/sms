@@ -247,4 +247,115 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get retryGetCode => '重试获取';
+
+  @override
+  String get requestCount => '请求数量';
+
+  @override
+  String get requestCountHelper => '每次最多10个手机号';
+
+  @override
+  String get totalCostLabel => '总费用';
+
+  @override
+  String get remainingBalanceLabel => '剩余余额';
+
+  @override
+  String get successCountLabel => '成功数量';
+
+  @override
+  String get failedCountLabel => '失败数量';
+
+  @override
+  String get pendingCountLabel => '等待数量';
+
+  @override
+  String get countryCode => '国家/地区';
+
+  @override
+  String get providerLabel => '服务商';
+
+  @override
+  String get validUntilLabel => '有效期至';
+
+  @override
+  String get codesSummary => '验证码统计';
+
+  @override
+  String get enterPhonesHint => '支持换行或逗号分隔输入多个手机号';
+
+  @override
+  String get enterPhonesHelper => '最多同时查询10个手机号';
+
+  @override
+  String get invalidPhoneInput => '请输入1-10个有效手机号';
+
+  @override
+  String get noCodesYet => '暂未获取到验证码，若为等待状态请继续轮询';
+
+  @override
+  String get messageLabel => '消息';
+
+  @override
+  String get receivedAtLabel => '接收时间';
+
+  @override
+  String get statusSuccess => '成功';
+
+  @override
+  String get statusPending => '等待';
+
+  @override
+  String get statusFailed => '失败';
+
+  @override
+  String get getCodeInstructions => '可同时查询最多10个手机号，若状态为等待请继续轮询此接口。';
+
+  @override
+  String get currentPasswordLabel => '当前密码';
+
+  @override
+  String get newPasswordLabel => '新密码';
+
+  @override
+  String get confirmPasswordLabel => '确认新密码';
+
+  @override
+  String get passwordTooShort => '密码至少需要6位';
+
+  @override
+  String get passwordUnchanged => '新密码不能与旧密码相同';
+
+  @override
+  String get passwordMismatch => '两次输入的密码不一致';
+
+  @override
+  String get changePasswordSuccess => '密码修改成功';
+
+  @override
+  String get changePasswordFailed => '密码修改失败';
+
+  @override
+  String get addWhitelistSuccess => '白名单添加成功';
+
+  @override
+  String get addWhitelistFailed => '白名单添加失败';
+
+  @override
+  String get deleteWhitelistSuccess => '白名单删除成功';
+
+  @override
+  String get deleteWhitelistFailed => '白名单删除失败';
+
+  @override
+  String get deleteWhitelistConfirm => '确认删除以下IP？';
+
+  @override
+  String get notesOptional => '备注（可选）';
+
+  @override
+  String get ipAddressRequired => '请输入IP地址或CIDR网段';
+
+  @override
+  String get invalidIpFormat => 'IP地址或CIDR格式不正确';
 }

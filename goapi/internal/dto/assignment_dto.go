@@ -28,12 +28,17 @@ type AssignmentHistoryItem struct {
 
 // AssignmentHistoryResponse is the response DTO for fetching assignment history.
 type AssignmentHistoryResponse struct {
-	Items []AssignmentHistoryItem `json:"items"`
+	Items      []AssignmentHistoryItem `json:"items"`
 	Pagination struct {
 		Total int64 `json:"total"`
 		Page  int   `json:"page"`
 		Limit int   `json:"limit"`
 	} `json:"pagination"`
+}
+
+// RecentAssignmentsResponse 列出最近的拉号记录
+type RecentAssignmentsResponse struct {
+	Items []AssignmentHistoryItem `json:"items"`
 }
 
 // CostStatisticsResponse is the response DTO for cost statistics.
