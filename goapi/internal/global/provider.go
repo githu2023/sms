@@ -110,7 +110,7 @@ func InitProviderManager(db *gorm.DB, providerRepo ProviderRepository, providerB
 				isMQTTProvider = true
 				zap.S().Infof("Provider %s identified as MQTT provider (by code)", providerCode)
 			}
-			
+
 			if isMQTTProvider {
 				zap.S().Infof("Creating MQTT provider: code=%s", providerCode)
 				// 创建 MQTTProvider
@@ -124,11 +124,11 @@ func InitProviderManager(db *gorm.DB, providerRepo ProviderRepository, providerB
 				}
 				providerID := ""
 				if p.MerchantID != nil {
-					providerID = *p.MerchantID
+					providerID = sanitizeCredential(*p.MerchantID)
 				}
 				providerKey := ""
 				if p.MerchantKey != nil {
-					providerKey = *p.MerchantKey
+					providerKey = sanitizeCredential(*p.MerchantKey)
 				}
 
 				// 验证必要配置
@@ -174,11 +174,11 @@ func InitProviderManager(db *gorm.DB, providerRepo ProviderRepository, providerB
 				}
 				customerOutNumber := ""
 				if p.MerchantID != nil {
-					customerOutNumber = *p.MerchantID
+					customerOutNumber = sanitizeCredential(*p.MerchantID)
 				}
 				encryptKey := ""
 				if p.MerchantKey != nil {
-					encryptKey = *p.MerchantKey
+					encryptKey = sanitizeCredential(*p.MerchantKey)
 				}
 
 				// 从 ExtraConfig 中读取特殊配置
@@ -348,4 +348,11 @@ func getStringValue(ptr *string, defaultValue string) string {
 		return defaultValue
 	}
 	return *ptr
+}
+
+func sanitizeCredential(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.ReplaceAll(value, "’", "")
+	value = strings.ReplaceAll(value, "'", "")
+	return value
 }
