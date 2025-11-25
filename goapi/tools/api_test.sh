@@ -5,7 +5,7 @@
 # 日期: 2025-11-24
 
 # 配置
-BASE_URL="http://localhost:6060"
+BASE_URL="http://38.60.203.212:6060/v1"
 CLIENT_API_PREFIX="/client/v1"
 API_PREFIX="/api/v1"
 TIMESTAMP=$(date +%s)

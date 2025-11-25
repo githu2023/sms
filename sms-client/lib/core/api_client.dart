@@ -13,7 +13,18 @@ import '../models/verification_code_result.dart';
 import '../models/whitelist.dart';
 
 class ApiClient {
-  static const String baseUrl = 'http://localhost:6060';
+  // 根据环境自动选择 baseUrl
+  // 开发环境使用本地地址，生产环境使用服务器地址
+  static String get baseUrl {
+    if (kDebugMode) {
+      // 本地开发环境
+      return 'http://localhost:6060';
+    } else {
+      // 生产环境 - 请根据实际情况修改为你的服务器地址
+      return 'http://38.60.203.212:6060/v1';
+    }
+  }
+  
   static const String tokenKey = 'auth_token';
 
   String? _token;
