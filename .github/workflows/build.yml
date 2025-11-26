@@ -181,24 +181,32 @@ jobs:
             ${{ runner.os }}-node-
         continue-on-error: true
 
-      - name: Check for package-lock.json
+      - name: Debug - Check files
         working-directory: admin-server/web
-        id: check_lockfile
         run: |
+          echo "=== Debug Info ==="
+          echo "Current directory: $(pwd)"
+          echo "Files in admin-server/web:"
+          ls -la
+          echo ""
+          echo "Checking for package-lock.json:"
           if [ -f package-lock.json ]; then
-            echo "lockfile_exists=true" >> $GITHUB_OUTPUT
+            echo "✓ package-lock.json EXISTS"
+            ls -lh package-lock.json
           else
-            echo "lockfile_exists=false" >> $GITHUB_OUTPUT
+            echo "✗ package-lock.json NOT FOUND"
+            echo "Trying to find it:"
+            find . -name "package-lock.json" -type f 2>/dev/null || echo "Not found anywhere"
           fi
 
       - name: Install dependencies
         working-directory: admin-server/web
         run: |
-          if [ "${{ steps.check_lockfile.outputs.lockfile_exists }}" == "true" ]; then
+          if [ -f package-lock.json ]; then
             echo "Using npm ci (package-lock.json found)"
             npm ci
           else
-            echo "Using npm install (no package-lock.json found)"
+            echo "Warning: package-lock.json not found, using npm install instead"
             npm install
           fi
 
