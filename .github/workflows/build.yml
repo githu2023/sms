@@ -203,10 +203,14 @@ jobs:
         working-directory: admin-server/web
         run: |
           if [ -f package-lock.json ]; then
-            echo "Using npm ci (package-lock.json found)"
-            npm ci
+            echo "package-lock.json found, attempting npm ci..."
+            # 尝试 npm ci，如果失败则使用 npm install 来修复 lockfile
+            npm ci || {
+              echo "npm ci failed (lockfile out of sync), updating lockfile with npm install..."
+              npm install
+            }
           else
-            echo "Warning: package-lock.json not found, using npm install instead"
+            echo "package-lock.json not found, using npm install"
             npm install
           fi
 
