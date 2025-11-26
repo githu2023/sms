@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sms-platform/goapi/internal/config"
 	"sms-platform/goapi/internal/domain"
@@ -19,7 +20,7 @@ type SchedulerService struct {
 	cfg             config.SchedulerConfig
 	assignmentRepo  repository.PhoneAssignmentRepository
 	providerRepo    domain.ProviderRepository
-	transactionRepo repository.TransactionRepository
+	transactionSvc  TransactionService
 	customerRepo    domain.CustomerRepository
 	db              *gorm.DB
 	stopChan        chan struct{}
@@ -32,18 +33,18 @@ func NewSchedulerService(
 	cfg config.SchedulerConfig,
 	assignmentRepo repository.PhoneAssignmentRepository,
 	providerRepo domain.ProviderRepository,
-	transactionRepo repository.TransactionRepository,
+	transactionSvc TransactionService,
 	customerRepo domain.CustomerRepository,
 	db *gorm.DB,
 ) *SchedulerService {
 	return &SchedulerService{
-		cfg:             cfg,
-		assignmentRepo:  assignmentRepo,
-		providerRepo:    providerRepo,
-		transactionRepo: transactionRepo,
-		customerRepo:    customerRepo,
-		db:              db,
-		stopChan:        make(chan struct{}),
+		cfg:            cfg,
+		assignmentRepo: assignmentRepo,
+		providerRepo:   providerRepo,
+		transactionSvc: transactionSvc,
+		customerRepo:   customerRepo,
+		db:             db,
+		stopChan:       make(chan struct{}),
 	}
 }
 
@@ -171,7 +172,7 @@ func (s *SchedulerService) markAssignmentAsExpired(ctx context.Context, assignme
 		assignment.Remark = &remark
 	}
 
-	// 开始数据库事务
+	// 开始数据库事务用于更新分配状态
 	tx := s.db.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -179,75 +180,40 @@ func (s *SchedulerService) markAssignmentAsExpired(ctx context.Context, assignme
 		}
 	}()
 
-	// 更新分配记录状态
-	err := s.assignmentRepo.Update(ctx, tx, assignment)
-	if err != nil {
+	if err := s.assignmentRepo.Update(ctx, tx, assignment); err != nil {
 		tx.Rollback()
 		zap.S().Errorf("Error marking assignment %d as expired: %v", assignment.ID, err)
 		return
 	}
 
-	// 如果已扣费，需要退款
+	if err := tx.Commit().Error; err != nil {
+		zap.S().Errorf("Error committing expired assignment %d: %v", assignment.ID, err)
+		return
+	}
+
+	// 如果已扣费，需要释放冻结金额
 	if assignment.CustomerID != nil && assignment.MerchantFee != nil && *assignment.MerchantFee > 0 {
 		customerID := *assignment.CustomerID
 		refundAmount := *assignment.MerchantFee
-
-		// 获取当前余额（加锁）
-		currentBalance, err := s.transactionRepo.GetBalanceForUpdate(ctx, tx, customerID)
-		if err != nil {
-			tx.Rollback()
-			zap.S().Errorf("Error getting balance for customer %d: %v", customerID, err)
-			return
-		}
-
-		// 创建退款交易记录（类型为 "3:拉号-回退"）
-		refundAmountFloat := float32(refundAmount)
-		balanceBeforeFloat := float32(currentBalance)
-		balanceAfterFloat := float32(currentBalance + refundAmount)
-		transactionType := "3" // 拉号-回退
-		assignmentID := assignment.ID
 		notes := fmt.Sprintf("手机号过期退款: %s (分配ID: %d)",
 			getPhoneNumber(assignment.PhoneNumber), assignment.ID)
 
-		refundTx := &domain.Transaction{
-			CustomerID:    customerID,
-			Amount:        &refundAmountFloat,
-			BalanceBefore: &balanceBeforeFloat,
-			BalanceAfter:  &balanceAfterFloat,
-			Type:          &transactionType,
-			ReferenceID:   &assignmentID,
-			Notes:         &notes,
-			CreatedAt:     time.Now(),
+		if _, err := s.transactionSvc.ReleaseReservedFunds(ctx, customerID, refundAmount, assignment.ID, notes); err != nil {
+			if errors.Is(err, ErrInsufficientFrozen) {
+				zap.S().Warnf("No frozen funds to release for assignment %d (customer %d): %v",
+					assignment.ID, customerID, err)
+			} else {
+				zap.S().Errorf("Error releasing frozen funds for assignment %d: %v", assignment.ID, err)
+			}
+		} else {
+			zap.S().Infof("Assignment %d marked as expired and refunded %.2f to customer %d",
+				assignment.ID, refundAmount, customerID)
 		}
-
-		err = s.transactionRepo.Create(ctx, refundTx)
-		if err != nil {
-			tx.Rollback()
-			zap.S().Errorf("Error creating refund transaction for assignment %d: %v", assignment.ID, err)
-			return
-		}
-
-		newBalance := currentBalance + refundAmount
-		if err := tx.WithContext(ctx).Model(&domain.Customer{}).
-			Where("id = ?", customerID).
-			Update("balance", newBalance).Error; err != nil {
-			tx.Rollback()
-			zap.S().Errorf("Error updating customer balance for customer %d: %v", customerID, err)
-			return
-		}
-
-		zap.S().Infof("Assignment %d marked as expired and refunded %.2f to customer %d",
-			assignment.ID, refundAmount, customerID)
 	} else {
 		zap.S().Infof("Assignment %d marked as expired (no refund needed)", assignment.ID)
 	}
 
-	// 提交事务
-	if err := tx.Commit().Error; err != nil {
-		zap.S().Errorf("Error committing transaction for expired assignment %d: %v", assignment.ID, err)
-	} else {
-		zap.S().Infof("Assignment %d marked as expired due to timeout", assignment.ID)
-	}
+	zap.S().Infof("Assignment %d marked as expired due to timeout", assignment.ID)
 
 	// 释放手机号
 	if assignment.PhoneNumber != nil {
@@ -378,16 +344,20 @@ func (s *SchedulerService) releasePhoneNumber(ctx context.Context, assignment *d
 		return
 	}
 
-	if providerInfo.Code == nil {
+	providerCode := "unknown"
+	if providerInfo.Code != nil {
+		providerCode = *providerInfo.Code
+	} else {
 		zap.S().Warnf("Provider %d has no code, cannot release phone for assignment %d", *assignment.ProviderID, assignment.ID)
 		return
 	}
 
 	// 从全局ProviderManager获取provider对象
 	providerManager := global.GetProviderManager()
-	providerInstance, err := providerManager.GetProviderByCode(*providerInfo.Code)
+	providerInstance, err := providerManager.GetProviderByCode(providerCode)
 	if err != nil {
-		zap.S().Errorf("Error getting provider instance for code %s to release phone: %v", *providerInfo.Code, err)
+		zap.S().Errorf("Error getting provider instance (code=%s, id=%d) to release phone: %v",
+			providerCode, *assignment.ProviderID, err)
 		return
 	}
 
@@ -404,16 +374,20 @@ func (s *SchedulerService) releasePhoneNumber(ctx context.Context, assignment *d
 
 	if extId != nil {
 		if err := providerInstance.ReleasePhone(releaseCtx, *assignment.PhoneNumber, *extId); err != nil {
-			zap.S().Warnf("Error releasing phone %s (extId: %s) for assignment %d: %v", *assignment.PhoneNumber, *extId, assignment.ID, err)
+			zap.S().Warnf("Error releasing phone %s (extId: %s) for assignment %d via provider %s: %v",
+				*assignment.PhoneNumber, *extId, assignment.ID, providerCode, err)
 		} else {
-			zap.S().Infof("Successfully released phone %s (extId: %s) for assignment %d", *assignment.PhoneNumber, *extId, assignment.ID)
+			zap.S().Infof("Successfully released phone %s (extId: %s) for assignment %d via provider %s",
+				*assignment.PhoneNumber, *extId, assignment.ID, providerCode)
 		}
 	} else {
 		// 如果没有 extId，尝试使用 phoneNumber（某些 provider 可能支持）
 		if err := providerInstance.ReleasePhone(releaseCtx, *assignment.PhoneNumber); err != nil {
-			zap.S().Warnf("Error releasing phone %s (no extId) for assignment %d: %v", *assignment.PhoneNumber, assignment.ID, err)
+			zap.S().Warnf("Error releasing phone %s (no extId) for assignment %d via provider %s: %v",
+				*assignment.PhoneNumber, assignment.ID, providerCode, err)
 		} else {
-			zap.S().Infof("Successfully released phone %s (no extId) for assignment %d", *assignment.PhoneNumber, assignment.ID)
+			zap.S().Infof("Successfully released phone %s (no extId) for assignment %d via provider %s",
+				*assignment.PhoneNumber, assignment.ID, providerCode)
 		}
 	}
 }

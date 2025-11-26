@@ -9,6 +9,7 @@ import (
 	"sms-platform/goapi/internal/api/handler/testutils"
 	"sms-platform/goapi/internal/common"
 	"sms-platform/goapi/internal/domain"
+	"sms-platform/goapi/internal/service"
 	"testing"
 	"time"
 
@@ -27,6 +28,14 @@ func (m *MockTransactionService) GetBalance(ctx context.Context, customerID int6
 	return args.Get(0).(float64), args.Error(1)
 }
 
+func (m *MockTransactionService) GetBalanceDetail(ctx context.Context, customerID int64) (*service.BalanceDetail, error) {
+	args := m.Called(ctx, customerID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.BalanceDetail), args.Error(1)
+}
+
 func (m *MockTransactionService) TopUp(ctx context.Context, customerID int64, amount float64, notes string) (*domain.Transaction, error) {
 	args := m.Called(ctx, customerID, amount, notes)
 	if args.Get(0) == nil {
@@ -36,6 +45,30 @@ func (m *MockTransactionService) TopUp(ctx context.Context, customerID int64, am
 }
 
 func (m *MockTransactionService) Deduct(ctx context.Context, customerID int64, amount float64, referenceID int64, notes string) (*domain.Transaction, error) {
+	args := m.Called(ctx, customerID, amount, referenceID, notes)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Transaction), args.Error(1)
+}
+
+func (m *MockTransactionService) ReserveFunds(ctx context.Context, customerID int64, amount float64, referenceID int64, notes string) (*domain.Transaction, error) {
+	args := m.Called(ctx, customerID, amount, referenceID, notes)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Transaction), args.Error(1)
+}
+
+func (m *MockTransactionService) CommitReservedFunds(ctx context.Context, customerID int64, amount float64, referenceID int64, notes string) (*domain.Transaction, error) {
+	args := m.Called(ctx, customerID, amount, referenceID, notes)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Transaction), args.Error(1)
+}
+
+func (m *MockTransactionService) ReleaseReservedFunds(ctx context.Context, customerID int64, amount float64, referenceID int64, notes string) (*domain.Transaction, error) {
 	args := m.Called(ctx, customerID, amount, referenceID, notes)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -74,7 +107,10 @@ func TestBalanceHandler_GetBalance_Success(t *testing.T) {
 	router := testutils.SetupTestRouter()
 
 	// Setup mock expectations
-	mockService.On("GetBalance", mock.Anything, int64(1)).Return(123.45, nil)
+	mockService.On("GetBalanceDetail", mock.Anything, int64(1)).Return(&service.BalanceDetail{
+		Balance:      123.45,
+		FrozenAmount: 10.0,
+	}, nil)
 
 	// Setup route
 	router.GET("/api/v1/balance", func(c *gin.Context) {
@@ -99,6 +135,7 @@ func TestBalanceHandler_GetBalance_Success(t *testing.T) {
 	data, ok := response.Data.(map[string]interface{})
 	assert.True(t, ok)
 	assert.Equal(t, 123.45, data["balance"])
+	assert.Equal(t, 10.0, data["frozen_amount"])
 	assert.Equal(t, "USD", data["currency"])
 
 	mockService.AssertExpectations(t)
@@ -137,7 +174,7 @@ func TestBalanceHandler_GetBalance_InternalError(t *testing.T) {
 	router := testutils.SetupTestRouter()
 
 	// Setup mock expectations
-	mockService.On("GetBalance", mock.Anything, int64(1)).Return(0.0, errors.New("database error"))
+	mockService.On("GetBalanceDetail", mock.Anything, int64(1)).Return((*service.BalanceDetail)(nil), errors.New("database error"))
 
 	// Setup route
 	router.GET("/api/v1/balance", func(c *gin.Context) {

@@ -22,8 +22,9 @@ func NewBalanceHandler(transactionService service.TransactionService) *BalanceHa
 
 // BalanceResponse represents the response structure for balance queries
 type BalanceResponse struct {
-	Balance  float64 `json:"balance" example:"123.45"`
-	Currency string  `json:"currency" example:"USD"`
+	Balance      float64 `json:"balance" example:"123.45"`
+	FrozenAmount float64 `json:"frozen_amount" example:"10.00"`
+	Currency     string  `json:"currency" example:"USD"`
 }
 
 // GetBalance handles GET /api/v1/balance and GET /client/v1/balance
@@ -45,7 +46,7 @@ func (h *BalanceHandler) GetBalance(c *gin.Context) {
 	}
 
 	// Get balance from transaction service
-	balance, err := h.transactionService.GetBalance(c.Request.Context(), customerID)
+	detail, err := h.transactionService.GetBalanceDetail(c.Request.Context(), customerID)
 	if err != nil {
 		common.RespondErrorWithMsg(c, common.CodeInternalError, "Failed to get balance: "+err.Error())
 		return
@@ -53,8 +54,9 @@ func (h *BalanceHandler) GetBalance(c *gin.Context) {
 
 	// Prepare response
 	response := BalanceResponse{
-		Balance:  balance,
-		Currency: "USD", // Hardcoded for now, could be configurable
+		Balance:      detail.Balance,
+		FrozenAmount: detail.FrozenAmount,
+		Currency:     "USD", // Hardcoded for now, could be configurable
 	}
 
 	common.RespondSuccess(c, response)

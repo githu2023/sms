@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"sms-platform/goapi/internal/common"
@@ -17,6 +18,7 @@ import (
 // PhoneService handles phone number and verification code operations
 type PhoneService struct {
 	transactionRepo                     repository.TransactionRepository
+	transactionService                  TransactionService
 	logRepo                             repository.LogRepository
 	assignmentRepo                      repository.PhoneAssignmentRepository
 	customerBusinessConfigRepo          repository.CustomerBusinessConfigRepository
@@ -24,6 +26,7 @@ type PhoneService struct {
 	platformBusinessTypeRepo            domain.PlatformBusinessTypeRepository
 	platformProviderBusinessMappingRepo domain.PlatformProviderBusinessMappingRepository
 	providerBusinessTypeRepo            domain.ProviderBusinessTypeRepository
+	providerRepo                        domain.ProviderRepository
 	customerRepo                        domain.CustomerRepository
 	db                                  *gorm.DB
 	apiLogger                           *common.APILogger
@@ -56,6 +59,7 @@ type GetCodeResult struct {
 // NewPhoneService creates a new phone service instance
 func NewPhoneService(
 	transactionRepo repository.TransactionRepository,
+	transactionService TransactionService,
 	logRepo repository.LogRepository,
 	assignmentRepo repository.PhoneAssignmentRepository,
 	customerBusinessConfigRepo repository.CustomerBusinessConfigRepository,
@@ -63,11 +67,13 @@ func NewPhoneService(
 	platformBusinessTypeRepo domain.PlatformBusinessTypeRepository,
 	platformProviderBusinessMappingRepo domain.PlatformProviderBusinessMappingRepository,
 	providerBusinessTypeRepo domain.ProviderBusinessTypeRepository,
+	providerRepo domain.ProviderRepository,
 	customerRepo domain.CustomerRepository,
 	db *gorm.DB,
 ) *PhoneService {
 	return &PhoneService{
 		transactionRepo:                     transactionRepo,
+		transactionService:                  transactionService,
 		logRepo:                             logRepo,
 		assignmentRepo:                      assignmentRepo,
 		customerBusinessConfigRepo:          customerBusinessConfigRepo,
@@ -75,6 +81,7 @@ func NewPhoneService(
 		platformBusinessTypeRepo:            platformBusinessTypeRepo,
 		platformProviderBusinessMappingRepo: platformProviderBusinessMappingRepo,
 		providerBusinessTypeRepo:            providerBusinessTypeRepo,
+		providerRepo:                        providerRepo,
 		customerRepo:                        customerRepo,
 		db:                                  db,
 		apiLogger:                           common.NewAPILogger(logRepo),
@@ -97,6 +104,23 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 			fmt.Sprintf("Business type %s is disabled for this customer", businessType))
 		return nil, common.CodeInvalidBusinessType
 	}
+
+	customer, err := s.customerRepo.FindByID(ctx, customerID)
+	if err != nil {
+		s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
+			fmt.Sprintf("Failed to load customer info: %v", err))
+		return nil, common.CodeInternalError
+	}
+
+	if customer.MerchantNo == nil || *customer.MerchantNo == "" ||
+		customer.MerchantName == nil || *customer.MerchantName == "" {
+		msg := "Customer merchant_no or merchant_name not configured"
+		s.apiLogger.LogBadRequest(ctx, customerID, "/api/phone/get_phone", msg)
+		return nil, common.CodeInternalError
+	}
+
+	merchantNo := *customer.MerchantNo
+	merchantName := *customer.MerchantName
 
 	// 2. 根据平台业务类型ID，查询出所有子业务类型映射（运营商业务类型）
 	mappings, err := s.platformProviderBusinessMappingRepo.FindByPlatformBusinessTypeID(ctx, customerConfig.PlatformBusinessTypeID)
@@ -162,9 +186,12 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 		return nil, common.CodeProviderBusinessNotFound
 	}
 
-	costPerPhone := 0.0
-	if providerBusinessType.Price != nil {
+	costPerPhone := providerInfo.CostPerSMS
+	if providerBusinessType.Price != nil && *providerBusinessType.Price > 0 {
 		costPerPhone = *providerBusinessType.Price
+	}
+	if costPerPhone <= 0 {
+		costPerPhone = 0.01
 	}
 
 	// 6. 判断 COST * count 是否超过了客户端的余额
@@ -185,36 +212,33 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 	results := make([]*GetPhoneResult, 0, count)
 	successCount := 0
 	failedCount := 0
-
-	// 开始数据库事务
-	tx := s.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	lockedBalance, err := s.transactionRepo.GetBalanceForUpdate(ctx, tx, customerID)
-	if err != nil {
-		tx.Rollback()
-		s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
-			fmt.Sprintf("Balance lock error: %v", err))
-		return nil, common.CodeInternalError
-	}
-	balance = lockedBalance
-	if balance < totalCost {
-		tx.Rollback()
-		s.apiLogger.LogInsufficientBalance(ctx, customerID, "/api/phone/get_phone",
-			fmt.Sprintf("Insufficient balance after lock: %.2f < %.2f", balance, totalCost))
-		return nil, common.CodeInsufficientBalance
-	}
+	currentBalance := balance
 
 	for i := 0; i < count; i++ {
-		if balance < costPerPhone {
-			tx.Rollback()
-			s.apiLogger.LogInsufficientBalance(ctx, customerID, "/api/phone/get_phone",
-				fmt.Sprintf("Insufficient balance during allocation: %.2f < %.2f", balance, costPerPhone))
-			return nil, common.CodeInsufficientBalance
+		reserveNotes := fmt.Sprintf("预冻结手机号: 业务=%s, card=%s, attempt=%d/%d",
+			customerConfig.BusinessName, cardType, i+1, count)
+
+		reserveTx, err := s.transactionService.ReserveFunds(ctx, customerID, costPerPhone, 0, reserveNotes)
+		if err != nil {
+			if errors.Is(err, ErrInsufficientBalance) {
+				s.apiLogger.LogInsufficientBalance(ctx, customerID, "/api/phone/get_phone",
+					fmt.Sprintf("Insufficient balance during reservation (attempt %d/%d)", i+1, count))
+				if successCount == 0 {
+					return nil, common.CodeInsufficientBalance
+				}
+				break
+			}
+
+			s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
+				fmt.Sprintf("Reserve funds error: %v", err))
+			if successCount == 0 {
+				return nil, common.CodeInternalError
+			}
+			break
+		}
+
+		if reserveTx != nil && reserveTx.BalanceAfter != nil {
+			currentBalance = float64(*reserveTx.BalanceAfter)
 		}
 
 		// 调用运营商接口获取手机号
@@ -242,7 +266,17 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 				zap.String("error_type", fmt.Sprintf("%T", err)),
 				zap.Error(err))
 			s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone", errorMsg)
-			// 继续尝试下一个，不立即返回错误
+
+			releaseNotes := fmt.Sprintf("释放预冻结（服务商失败）: provider=%s, error=%v",
+				*selectedMapping.ProviderCode, err)
+			releaseTx, releaseErr := s.transactionService.ReleaseReservedFunds(ctx, customerID, costPerPhone, 0, releaseNotes)
+			if releaseErr != nil {
+				global.LogError("释放预冻结失败",
+					zap.Int64("customer_id", customerID),
+					zap.Error(releaseErr))
+			} else if releaseTx != nil && releaseTx.BalanceAfter != nil {
+				currentBalance = float64(*releaseTx.BalanceAfter)
+			}
 			continue
 		}
 
@@ -254,21 +288,26 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 			zap.Float64("cost", phoneResponse.Cost))
 
 		// 8. 如果获取到手机号成功，记录到数据库
-		providerCost := phoneResponse.Cost
-		if providerBusinessType.Price != nil {
-			providerCost = *providerBusinessType.Price
-		}
-		merchantFee := providerCost // 商户费用等于渠道成本（可以后续调整）
+		providerCost := costPerPhone
+		merchantFee := providerCost
 		profit := 0.0
 		pendingStatus := "pending"
 		remark := fmt.Sprintf("业务：%s (%s)，提供商：%s，子业务：%s",
 			customerConfig.BusinessName, customerConfig.BusinessCode, *selectedMapping.ProviderCode, *selectedMapping.BusinessCode)
 
+		var providerDBID *int64
+		if s.providerRepo != nil && selectedMapping.ProviderCode != nil {
+			if providerRecord, err := s.providerRepo.FindByCode(ctx, *selectedMapping.ProviderCode); err == nil {
+				id := int64(providerRecord.ID)
+				providerDBID = &id
+			}
+		}
+
 		assignment := &domain.PhoneAssignment{
 			BusinessName:           customerConfig.BusinessName,
 			BusinessCode:           customerConfig.BusinessCode,
-			MerchantNo:             fmt.Sprintf("CUST_%d", customerID),
-			MerchantName:           fmt.Sprintf("Customer %d", customerID),
+			MerchantNo:             merchantNo,
+			MerchantName:           merchantName,
 			PhoneNumber:            &phoneResponse.PhoneNumber,
 			Status:                 &pendingStatus,
 			ProviderCost:           &providerCost,
@@ -287,56 +326,41 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 		}
 
 		// 如果有ProviderID，设置它
-		if selectedMapping.ProviderBusinessTypeID != nil {
+		if providerDBID != nil {
+			assignment.ProviderID = providerDBID
+		} else if selectedMapping.ProviderBusinessTypeID != nil {
 			providerID := int64(providerBusinessType.ProviderID)
 			assignment.ProviderID = &providerID
 		}
 
-		if err := s.assignmentRepo.Create(ctx, tx, assignment); err != nil {
-			tx.Rollback()
+		if err := s.assignmentRepo.Create(ctx, nil, assignment); err != nil {
+			s.transactionService.ReleaseReservedFunds(ctx, customerID, costPerPhone, 0,
+				fmt.Sprintf("释放预冻结（保存号码失败）: %v", err))
 			s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
 				fmt.Sprintf("Assignment creation error: %v", err))
 			return nil, common.CodeInternalError
 		}
 
-		// 9. 更新客户端的余额（扣费）
-		newBalance := balance - providerCost
-		cost := -float32(providerCost)
-		balanceBeforeFloat := float32(balance)
-		balanceAfterFloat := float32(newBalance)
-		transactionType := "2" // 拉号码
-		notes := fmt.Sprintf("手机号获取: %s (提供商: %s, 业务: %s)",
-			phoneResponse.PhoneNumber, phoneResponse.ProviderID, customerConfig.BusinessName)
-
-		deductTx := &domain.Transaction{
-			CustomerID:    customerID,
-			Amount:        &cost,
-			BalanceBefore: &balanceBeforeFloat,
-			BalanceAfter:  &balanceAfterFloat,
-			Type:          &transactionType,
-			Notes:         &notes,
-			CreatedAt:     time.Now(),
+		if reserveTx != nil {
+			s.attachTransactionReference(ctx, reserveTx, assignment.ID)
 		}
 
-		if err := s.transactionRepo.Create(ctx, deductTx); err != nil {
-			tx.Rollback()
+		commitNotes := fmt.Sprintf("冻结转消费: assignment_id=%d", assignment.ID)
+		if _, err := s.transactionService.CommitReservedFunds(ctx, customerID, providerCost, assignment.ID, commitNotes); err != nil {
+			global.LogError("冻结转实扣失败",
+				zap.Int64("customer_id", customerID),
+				zap.Int64("assignment_id", assignment.ID),
+				zap.Error(err))
+			s.transactionService.ReleaseReservedFunds(ctx, customerID, providerCost, assignment.ID,
+				fmt.Sprintf("释放预冻结（转消费失败）: %v", err))
+			failStatus := "failed"
+			assignment.Status = &failStatus
+			assignment.UpdatedAt = time.Now()
+			_ = s.assignmentRepo.Update(ctx, nil, assignment)
 			s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
-				fmt.Sprintf("Transaction creation error: %v", err))
+				fmt.Sprintf("Commit frozen funds error: %v", err))
 			return nil, common.CodeInternalError
 		}
-
-		// 更新客户余额字段（在事务中）
-		if err := tx.WithContext(ctx).Model(&domain.Customer{}).
-			Where("id = ?", customerID).
-			Update("balance", newBalance).Error; err != nil {
-			tx.Rollback()
-			s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
-				fmt.Sprintf("Failed to update customer balance: %v", err))
-			return nil, common.CodeInternalError
-		}
-
-		// 更新余额用于下次循环
-		balance = newBalance
 
 		// 添加到结果
 		results = append(results, &GetPhoneResult{
@@ -345,17 +369,10 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 			Cost:        providerCost,
 			ValidUntil:  phoneResponse.ValidUntil,
 			ProviderID:  phoneResponse.ProviderID,
-			Balance:     newBalance,
+			Balance:     currentBalance,
 		})
 
 		successCount++
-	}
-
-	// 提交事务
-	if err := tx.Commit().Error; err != nil {
-		s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
-			fmt.Sprintf("Transaction commit error: %v", err))
-		return nil, common.CodeInternalError
 	}
 
 	// 如果有失败的，记录日志
@@ -384,6 +401,20 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 		fmt.Sprintf("Successfully got %d phone numbers, failed %d", successCount, failedCount))
 
 	return results, common.CodeSuccess
+}
+
+func (s *PhoneService) attachTransactionReference(ctx context.Context, txRecord *domain.Transaction, referenceID int64) {
+	if txRecord == nil || txRecord.ID == 0 {
+		return
+	}
+
+	txRecord.ReferenceID = &referenceID
+	if err := s.transactionRepo.Update(ctx, txRecord); err != nil {
+		global.LogError("更新交易引用失败",
+			zap.Int64("transaction_id", txRecord.ID),
+			zap.Int64("reference_id", referenceID),
+			zap.Error(err))
+	}
 }
 
 // selectByWeight 根据权重随机选择一个映射

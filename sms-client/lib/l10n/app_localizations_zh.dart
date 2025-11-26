@@ -54,6 +54,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get balance => '当前余额';
 
   @override
+  String get frozenAmount => '冻结金额';
+
+  @override
+  String get availableBalance => '可用余额';
+
+  @override
   String get recharge => '充值';
 
   @override

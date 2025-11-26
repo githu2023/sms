@@ -13,6 +13,7 @@ var (
 	ErrInsufficientBalance = errors.New("insufficient balance")
 	ErrInvalidAmount       = errors.New("invalid amount")
 	ErrTransactionFailed   = errors.New("transaction failed")
+	ErrInsufficientFrozen  = errors.New("insufficient frozen funds")
 )
 
 // TransactionService defines the interface for transaction business logic
@@ -23,8 +24,20 @@ type TransactionService interface {
 	// Deduct subtracts funds from customer account
 	Deduct(ctx context.Context, customerID int64, amount float64, referenceID int64, notes string) (*domain.Transaction, error)
 
+	// ReserveFunds moves funds from balance to frozen balance
+	ReserveFunds(ctx context.Context, customerID int64, amount float64, referenceID int64, notes string) (*domain.Transaction, error)
+
+	// CommitReservedFunds consumes previously frozen funds without touching balance
+	CommitReservedFunds(ctx context.Context, customerID int64, amount float64, referenceID int64, notes string) (*domain.Transaction, error)
+
+	// ReleaseReservedFunds returns frozen funds back to available balance
+	ReleaseReservedFunds(ctx context.Context, customerID int64, amount float64, referenceID int64, notes string) (*domain.Transaction, error)
+
 	// GetBalance returns current customer balance
 	GetBalance(ctx context.Context, customerID int64) (float64, error)
+
+	// GetBalanceDetail returns available balance and frozen amount
+	GetBalanceDetail(ctx context.Context, customerID int64) (*BalanceDetail, error)
 
 	// GetTransactionHistory returns paginated transaction history
 	GetTransactionHistory(ctx context.Context, customerID int64, limit, offset int) ([]*domain.Transaction, int64, error)
@@ -39,6 +52,12 @@ type TransactionService interface {
 // transactionService implements TransactionService interface
 type transactionService struct {
 	transactionRepo repository.TransactionRepository
+}
+
+// BalanceDetail represents detailed balance info
+type BalanceDetail struct {
+	Balance      float64
+	FrozenAmount float64
 }
 
 // NewTransactionService creates a new instance of TransactionService
@@ -65,7 +84,7 @@ func (s *transactionService) TopUp(ctx context.Context, customerID int64, amount
 	amountFloat := float32(amount)
 	balanceBeforeFloat := float32(currentBalance)
 	balanceAfterFloat := float32(currentBalance + amount)
-	transactionType := "1"
+	transactionType := domain.TransactionTypeTopUp
 
 	transaction := &domain.Transaction{
 		CustomerID:    customerID,
@@ -108,7 +127,7 @@ func (s *transactionService) Deduct(ctx context.Context, customerID int64, amoun
 	amountFloat := -float32(amount) // Negative for deduction
 	balanceBeforeFloat := float32(currentBalance)
 	balanceAfterFloat := float32(currentBalance - amount)
-	transactionType := "2"
+	transactionType := domain.TransactionTypeDeduct
 
 	transaction := &domain.Transaction{
 		CustomerID:    customerID,
@@ -130,6 +149,180 @@ func (s *transactionService) Deduct(ctx context.Context, customerID int64, amoun
 	return transaction, nil
 }
 
+func (s *transactionService) ReserveFunds(ctx context.Context, customerID int64, amount float64, referenceID int64, notes string) (*domain.Transaction, error) {
+	if amount <= 0 {
+		return nil, ErrInvalidAmount
+	}
+
+	tx, err := s.transactionRepo.BeginTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin reserve transaction: %w", err)
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			tx.Rollback()
+		}
+	}()
+
+	snapshot, err := s.transactionRepo.ReserveBalance(ctx, tx, customerID, amount)
+	if err != nil {
+		if errors.Is(err, repository.ErrInsufficientBalance) {
+			return nil, ErrInsufficientBalance
+		}
+		return nil, err
+	}
+
+	amountFloat := -float32(amount)
+	balanceBeforeFloat := float32(snapshot.BalanceBefore)
+	balanceAfterFloat := float32(snapshot.BalanceAfter)
+	frozenBeforeFloat := float32(snapshot.FrozenBefore)
+	frozenAfterFloat := float32(snapshot.FrozenAfter)
+	transactionType := domain.TransactionTypeFreeze
+	refID := referenceID
+	noteCopy := notes
+
+	transaction := &domain.Transaction{
+		CustomerID:    customerID,
+		Amount:        &amountFloat,
+		BalanceBefore: &balanceBeforeFloat,
+		BalanceAfter:  &balanceAfterFloat,
+		FrozenBefore:  &frozenBeforeFloat,
+		FrozenAfter:   &frozenAfterFloat,
+		Type:          &transactionType,
+		ReferenceID:   &refID,
+		Notes:         &noteCopy,
+		CreatedAt:     time.Now(),
+	}
+
+	if err := s.transactionRepo.CreateWithTx(ctx, tx, transaction); err != nil {
+		return nil, fmt.Errorf("failed to create reserve transaction: %w", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, fmt.Errorf("failed to commit reserve transaction: %w", err)
+	}
+	committed = true
+	return transaction, nil
+}
+
+func (s *transactionService) CommitReservedFunds(ctx context.Context, customerID int64, amount float64, referenceID int64, notes string) (*domain.Transaction, error) {
+	if amount <= 0 {
+		return nil, ErrInvalidAmount
+	}
+
+	tx, err := s.transactionRepo.BeginTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin commit transaction: %w", err)
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			tx.Rollback()
+		}
+	}()
+
+	snapshot, err := s.transactionRepo.CommitReservedBalance(ctx, tx, customerID, amount)
+	if err != nil {
+		if errors.Is(err, repository.ErrInsufficientFrozenFunds) {
+			return nil, ErrInsufficientFrozen
+		}
+		return nil, err
+	}
+
+	zeroAmount := float32(0)
+	balanceBeforeFloat := float32(snapshot.BalanceBefore)
+	balanceAfterFloat := float32(snapshot.BalanceAfter)
+	frozenBeforeFloat := float32(snapshot.FrozenBefore)
+	frozenAfterFloat := float32(snapshot.FrozenAfter)
+	transactionType := domain.TransactionTypeFreezeToCharge
+	refID := referenceID
+	noteCopy := notes
+
+	transaction := &domain.Transaction{
+		CustomerID:    customerID,
+		Amount:        &zeroAmount,
+		BalanceBefore: &balanceBeforeFloat,
+		BalanceAfter:  &balanceAfterFloat,
+		FrozenBefore:  &frozenBeforeFloat,
+		FrozenAfter:   &frozenAfterFloat,
+		Type:          &transactionType,
+		ReferenceID:   &refID,
+		Notes:         &noteCopy,
+		CreatedAt:     time.Now(),
+	}
+
+	if err := s.transactionRepo.CreateWithTx(ctx, tx, transaction); err != nil {
+		return nil, fmt.Errorf("failed to create commit transaction: %w", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, fmt.Errorf("failed to commit commit transaction: %w", err)
+	}
+	committed = true
+	return transaction, nil
+}
+
+func (s *transactionService) ReleaseReservedFunds(ctx context.Context, customerID int64, amount float64, referenceID int64, notes string) (*domain.Transaction, error) {
+	if amount <= 0 {
+		return nil, ErrInvalidAmount
+	}
+
+	tx, err := s.transactionRepo.BeginTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin release transaction: %w", err)
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			tx.Rollback()
+		}
+	}()
+
+	snapshot, err := s.transactionRepo.ReleaseReservedBalance(ctx, tx, customerID, amount)
+	if err != nil {
+		if errors.Is(err, repository.ErrInsufficientFrozenFunds) {
+			return nil, ErrInsufficientFrozen
+		}
+		return nil, err
+	}
+
+	amountFloat := float32(amount)
+	balanceBeforeFloat := float32(snapshot.BalanceBefore)
+	balanceAfterFloat := float32(snapshot.BalanceAfter)
+	frozenBeforeFloat := float32(snapshot.FrozenBefore)
+	frozenAfterFloat := float32(snapshot.FrozenAfter)
+	transactionType := domain.TransactionTypeUnfreeze
+	refID := referenceID
+	noteCopy := notes
+
+	transaction := &domain.Transaction{
+		CustomerID:    customerID,
+		Amount:        &amountFloat,
+		BalanceBefore: &balanceBeforeFloat,
+		BalanceAfter:  &balanceAfterFloat,
+		FrozenBefore:  &frozenBeforeFloat,
+		FrozenAfter:   &frozenAfterFloat,
+		Type:          &transactionType,
+		ReferenceID:   &refID,
+		Notes:         &noteCopy,
+		CreatedAt:     time.Now(),
+	}
+
+	if err := s.transactionRepo.CreateWithTx(ctx, tx, transaction); err != nil {
+		return nil, fmt.Errorf("failed to create release transaction: %w", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, fmt.Errorf("failed to commit release transaction: %w", err)
+	}
+	committed = true
+	return transaction, nil
+}
+
 // GetBalance returns current customer balance
 func (s *transactionService) GetBalance(ctx context.Context, customerID int64) (float64, error) {
 	balance, err := s.transactionRepo.GetBalance(ctx, customerID)
@@ -137,6 +330,18 @@ func (s *transactionService) GetBalance(ctx context.Context, customerID int64) (
 		return 0, fmt.Errorf("failed to get balance: %w", err)
 	}
 	return balance, nil
+}
+
+// GetBalanceDetail returns both available balance and frozen amount
+func (s *transactionService) GetBalanceDetail(ctx context.Context, customerID int64) (*BalanceDetail, error) {
+	balance, frozen, err := s.transactionRepo.GetBalanceDetail(ctx, customerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get balance detail: %w", err)
+	}
+	return &BalanceDetail{
+		Balance:      balance,
+		FrozenAmount: frozen,
+	}, nil
 }
 
 // GetTransactionHistory returns paginated transaction history

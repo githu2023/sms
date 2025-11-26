@@ -5,3 +5,4 @@ sms-client/web/*
 sms-client/nginx_flutter.conf
 sms-client/web/index.html
 goapi/logs
+build

@@ -40,14 +40,16 @@ type APITokenResponse struct {
 
 type BalanceResponse struct {
 	Balance float64 `json:"balance"`
+	Frozen  float64 `json:"frozen_amount,omitempty"`
 	UserID  int64   `json:"user_id,omitempty"`
 }
 
 type UserProfileResponse struct {
-	ID       int64   `json:"id"`
-	Username string  `json:"username"`
-	Email    string  `json:"email"`
-	Balance  float64 `json:"balance"`
+	ID           int64   `json:"id"`
+	Username     string  `json:"username"`
+	Email        string  `json:"email"`
+	Balance      float64 `json:"balance"`
+	FrozenAmount float64 `json:"frozen_amount"`
 }
 
 type PhoneResponse struct {
@@ -205,8 +207,8 @@ func testGetUserProfile() error {
 		return fmt.Errorf("解析响应失败: %v", err)
 	}
 
-	fmt.Printf("✅ 用户信息获取成功: ID=%d, 用户名=%s, 邮箱=%s, 余额=%.2f\n",
-		profile.ID, profile.Username, profile.Email, profile.Balance)
+	fmt.Printf("✅ 用户信息获取成功: ID=%d, 用户名=%s, 邮箱=%s, 余额=%.2f, 冻结=%.2f\n",
+		profile.ID, profile.Username, profile.Email, profile.Balance, profile.FrozenAmount)
 	return nil
 }
 
@@ -227,7 +229,7 @@ func testGetBalance(apiPrefix, token, apiType string) error {
 		return fmt.Errorf("解析响应失败: %v", err)
 	}
 
-	fmt.Printf("✅ %s余额查询成功，余额: %.2f\n", apiType, balance.Balance)
+	fmt.Printf("✅ %s余额查询成功，可用余额: %.2f, 冻结: %.2f\n", apiType, balance.Balance, balance.Frozen)
 	return nil
 }
 
@@ -236,14 +238,14 @@ var lastPhoneNumber string // 保存最后获取的手机号，用于后续测�
 func testGetPhone(apiPrefix, token, apiType string) error {
 	fmt.Printf("\n[5] 测试%s获取手机号...\n", apiType)
 	headers := map[string]string{"Authorization": "Bearer " + token}
-	
+
 	// 先获取可用的业务类型
 	fmt.Println("   获取业务类型列表...")
 	businessResp, err := makeRequest("GET", BaseURL+apiPrefix+"/business_types", headers, nil)
 	if err == nil && businessResp.Code == 200 {
 		fmt.Printf("   ✅ 业务类型获取成功\n")
 	}
-	
+
 	// 使用wx业务类型（根据实际配置）
 	phoneData := GetPhoneRequest{
 		BusinessType: "wx", // 使用wx业务类型
@@ -269,13 +271,13 @@ func testGetPhone(apiPrefix, token, apiType string) error {
 	// 解析响应 - 根据实际API响应结构
 	dataBytes, _ := json.Marshal(resp.Data)
 	var phoneDataResp struct {
-		Phones            []PhoneResponse `json:"phones"`
-		TotalCost         float64         `json:"total_cost"`
-		RemainingBalance  float64         `json:"remaining_balance"`
-		SuccessCount      int             `json:"success_count"`
-		FailedCount       int             `json:"failed_count"`
+		Phones           []PhoneResponse `json:"phones"`
+		TotalCost        float64         `json:"total_cost"`
+		RemainingBalance float64         `json:"remaining_balance"`
+		SuccessCount     int             `json:"success_count"`
+		FailedCount      int             `json:"failed_count"`
 	}
-	
+
 	if err := json.Unmarshal(dataBytes, &phoneDataResp); err != nil {
 		// 尝试另一种格式
 		var phones []PhoneResponse
@@ -424,12 +426,12 @@ func main() {
 				fmt.Println("或者先运行: go run api_tester.go phone")
 				return
 			}
-			
+
 			if err := testUserLogin(); err != nil {
 				fmt.Printf("❌ %v\n", err)
 				return
 			}
-			
+
 			// 优先使用客户端API
 			if clientToken != "" {
 				testGetCode(ClientAPIPrefix, clientToken, "客户端", []string{phoneNumber})

@@ -161,6 +161,7 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 		Username:       username,
 		Email:          email,
 		Balance:        customer.Balance,
+		FrozenAmount:   customer.FrozenAmount,
 		APISecretKey:   customer.APISecretKey,
 		RegistrationIP: registrationIP,
 		LastLoginAt:    lastLoginAt,

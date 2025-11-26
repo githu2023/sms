@@ -10,10 +10,12 @@ import (
 type Transaction struct {
 	ID            int64          `gorm:"primaryKey;autoIncrement" json:"id"`
 	CustomerID    int64          `gorm:"not null;comment:客户ID;index:idx_customer_id" json:"customer_id"`
-	Amount        *float32       `gorm:"comment:变动金额 (正数为充值, 负数为消费)" json:"amount"`
+	Amount        *float32       `gorm:"comment:变动金额 (正数为增加, 负数为减少)" json:"amount"`
 	BalanceBefore *float32       `gorm:"comment:变动前余额" json:"balance_before"`
 	BalanceAfter  *float32       `gorm:"comment:变动后余额" json:"balance_after"`
-	Type          *string        `gorm:"type:varchar(10);comment:交易类型 (1:充值, 2:拉号码, 3:拉号-回退, 4:上分, 5:下分)" json:"type"`
+	FrozenBefore  *float32       `gorm:"comment:变动前冻结金额" json:"frozen_before"`
+	FrozenAfter   *float32       `gorm:"comment:变动后冻结金额" json:"frozen_after"`
+	Type          *string        `gorm:"type:varchar(10);comment:交易类型 (1:充值, 2:拉号消费, 3:拉号回退, 4:上分, 5:下分, 6:预冻结, 7:解冻, 8:冻结转实扣)" json:"type"`
 	ReferenceID   *int64         `gorm:"comment:关联的业务ID, 例如sms_phone_assignments.id" json:"reference_id"`
 	Notes         *string        `gorm:"type:varchar(255);comment:备注" json:"notes"`
 	CreatedAt     time.Time      `json:"created_at"`

@@ -44,7 +44,7 @@ func TestTransactionRepository_Create(t *testing.T) {
 	repo := setupTransactionRepo(db)
 	ctx := context.Background()
 
-	transaction := createTestTransaction(1, 100.50, 0, 100.50, "1", "Initial deposit", time.Now())
+	transaction := createTestTransaction(1, 100.50, 0, 100.50, domain.TransactionTypeTopUp, "Initial deposit", time.Now())
 
 	err := repo.Create(ctx, transaction)
 	assert.NoError(t, err)
@@ -57,7 +57,7 @@ func TestTransactionRepository_FindByID(t *testing.T) {
 	ctx := context.Background()
 
 	// Create test data
-	transaction := createTestTransaction(1, 100.50, 0, 100.50, "1", "Test transaction", time.Now())
+	transaction := createTestTransaction(1, 100.50, 0, 100.50, domain.TransactionTypeTopUp, "Test transaction", time.Now())
 	db.Create(transaction)
 
 	// Test FindByID
@@ -78,7 +78,7 @@ func TestTransactionRepository_FindByCustomerID(t *testing.T) {
 
 	// Create test data
 	for i := 1; i <= 5; i++ {
-		transaction := createTestTransaction(1, float32(i*10), 0, float32(i*10), "1", fmt.Sprintf("Transaction %d", i), time.Now().Add(-time.Duration(i)*time.Hour))
+		transaction := createTestTransaction(1, float32(i*10), 0, float32(i*10), domain.TransactionTypeTopUp, fmt.Sprintf("Transaction %d", i), time.Now().Add(-time.Duration(i)*time.Hour))
 		db.Create(transaction)
 	}
 
@@ -96,12 +96,12 @@ func TestTransactionRepository_FindByCustomerIDAndType(t *testing.T) {
 
 	// Create test data with different types
 	for i := 1; i <= 3; i++ {
-		transaction := createTestTransaction(1, float32(i*10), 0, 0, "1", "", time.Now().Add(-time.Duration(i)*time.Hour))
+		transaction := createTestTransaction(1, float32(i*10), 0, 0, domain.TransactionTypeTopUp, "", time.Now().Add(-time.Duration(i)*time.Hour))
 		db.Create(transaction)
 	}
 
 	for i := 1; i <= 2; i++ {
-		transaction := createTestTransaction(1, float32(i*5), 0, 0, "2", "", time.Now().Add(-time.Duration(i)*time.Hour))
+		transaction := createTestTransaction(1, float32(i*5), 0, 0, domain.TransactionTypeDeduct, "", time.Now().Add(-time.Duration(i)*time.Hour))
 		db.Create(transaction)
 	}
 
@@ -152,6 +152,28 @@ func TestTransactionRepository_GetBalance(t *testing.T) {
 	assert.Error(t, err) // Should return error for non-existent customer
 }
 
+func TestTransactionRepository_GetBalanceDetail(t *testing.T) {
+	db := setupTransactionTestDB()
+	repo := setupTransactionRepo(db)
+	ctx := context.Background()
+
+	customer := &domain.Customer{
+		ID:           1,
+		Balance:      150.0,
+		FrozenAmount: 25.0,
+		APISecretKey: "secret",
+	}
+	db.Create(customer)
+
+	balance, frozen, err := repo.GetBalanceDetail(ctx, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, 150.0, balance)
+	assert.Equal(t, 25.0, frozen)
+
+	_, _, err = repo.GetBalanceDetail(ctx, 999)
+	assert.Error(t, err)
+}
+
 func TestTransactionRepository_FindByDateRange(t *testing.T) {
 	db := setupTransactionTestDB()
 	repo := setupTransactionRepo(db)
@@ -163,10 +185,10 @@ func TestTransactionRepository_FindByDateRange(t *testing.T) {
 
 	// Create test data
 	transactions := []*domain.Transaction{
-		createTestTransaction(1, 100, 0, 100, "1", "", yesterday.Add(-1*time.Hour)), // before range
-		createTestTransaction(1, 50, 100, 150, "1", "", now),                        // in range
-		createTestTransaction(1, 20, 150, 130, "2", "", now.Add(1*time.Hour)),       // in range
-		createTestTransaction(1, 30, 130, 160, "1", "", tomorrow.Add(1*time.Hour)),  // after range
+		createTestTransaction(1, 100, 0, 100, domain.TransactionTypeTopUp, "", yesterday.Add(-1*time.Hour)), // before range
+		createTestTransaction(1, 50, 100, 150, domain.TransactionTypeTopUp, "", now),                        // in range
+		createTestTransaction(1, 20, 150, 130, domain.TransactionTypeDeduct, "", now.Add(1*time.Hour)),      // in range
+		createTestTransaction(1, 30, 130, 160, domain.TransactionTypeTopUp, "", tomorrow.Add(1*time.Hour)),  // after range
 	}
 
 	for _, tx := range transactions {
@@ -186,7 +208,7 @@ func TestTransactionRepository_Update(t *testing.T) {
 	ctx := context.Background()
 
 	// Create test data
-	transaction := createTestTransaction(1, 100.50, 0, 100.50, "1", "Initial notes", time.Now())
+	transaction := createTestTransaction(1, 100.50, 0, 100.50, domain.TransactionTypeTopUp, "Initial notes", time.Now())
 	db.Create(transaction)
 
 	// Update
@@ -212,4 +234,99 @@ func TestTransactionRepository_BeginTx(t *testing.T) {
 
 	// Test rollback
 	tx.Rollback()
+}
+
+func TestTransactionRepository_ReserveBalance_Success(t *testing.T) {
+	db := setupTransactionTestDB()
+	repo := setupTransactionRepo(db)
+	ctx := context.Background()
+
+	customer := &domain.Customer{
+		ID:           1,
+		Balance:      100,
+		FrozenAmount: 10,
+		APISecretKey: "key",
+	}
+	db.Create(customer)
+
+	snapshot, err := repo.ReserveBalance(ctx, nil, customer.ID, 40)
+	assert.NoError(t, err)
+	assert.Equal(t, 100.0, snapshot.BalanceBefore)
+	assert.Equal(t, 60.0, snapshot.BalanceAfter)
+	assert.Equal(t, 10.0, snapshot.FrozenBefore)
+	assert.Equal(t, 50.0, snapshot.FrozenAfter)
+
+	var updated domain.Customer
+	db.First(&updated, customer.ID)
+	assert.Equal(t, 60.0, updated.Balance)
+	assert.Equal(t, 50.0, updated.FrozenAmount)
+}
+
+func TestTransactionRepository_ReserveBalance_Insufficient(t *testing.T) {
+	db := setupTransactionTestDB()
+	repo := setupTransactionRepo(db)
+	ctx := context.Background()
+
+	customer := &domain.Customer{
+		ID:           1,
+		Balance:      30,
+		FrozenAmount: 0,
+		APISecretKey: "key",
+	}
+	db.Create(customer)
+
+	snapshot, err := repo.ReserveBalance(ctx, nil, customer.ID, 40)
+	assert.Nil(t, snapshot)
+	assert.ErrorIs(t, err, ErrInsufficientBalance)
+}
+
+func TestTransactionRepository_CommitReservedBalance_Success(t *testing.T) {
+	db := setupTransactionTestDB()
+	repo := setupTransactionRepo(db)
+	ctx := context.Background()
+
+	customer := &domain.Customer{
+		ID:           1,
+		Balance:      50,
+		FrozenAmount: 30,
+		APISecretKey: "key",
+	}
+	db.Create(customer)
+
+	snapshot, err := repo.CommitReservedBalance(ctx, nil, customer.ID, 20)
+	assert.NoError(t, err)
+	assert.Equal(t, 10.0, snapshot.FrozenAfter)
+	assert.Equal(t, 20.0, snapshot.FrozenBefore-snapshot.FrozenAfter)
+	assert.Equal(t, 50.0, snapshot.BalanceAfter)
+
+	var updated domain.Customer
+	db.First(&updated, customer.ID)
+	assert.Equal(t, 50.0, updated.Balance)
+	assert.Equal(t, 10.0, updated.FrozenAmount)
+}
+
+func TestTransactionRepository_ReleaseReservedBalance_Success(t *testing.T) {
+	db := setupTransactionTestDB()
+	repo := setupTransactionRepo(db)
+	ctx := context.Background()
+
+	customer := &domain.Customer{
+		ID:           1,
+		Balance:      80,
+		FrozenAmount: 20,
+		APISecretKey: "key",
+	}
+	db.Create(customer)
+
+	snapshot, err := repo.ReleaseReservedBalance(ctx, nil, customer.ID, 15)
+	assert.NoError(t, err)
+	assert.Equal(t, 80.0, snapshot.BalanceBefore)
+	assert.Equal(t, 95.0, snapshot.BalanceAfter)
+	assert.Equal(t, 20.0, snapshot.FrozenBefore)
+	assert.Equal(t, 5.0, snapshot.FrozenAfter)
+
+	var updated domain.Customer
+	db.First(&updated, customer.ID)
+	assert.Equal(t, 95.0, updated.Balance)
+	assert.Equal(t, 5.0, updated.FrozenAmount)
 }

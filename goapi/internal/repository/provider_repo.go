@@ -28,6 +28,14 @@ func (r *providerRepository) FindByID(ctx context.Context, id int) (*domain.Prov
 	return &provider, nil
 }
 
+func (r *providerRepository) FindByCode(ctx context.Context, code string) (*domain.Provider, error) {
+	var provider domain.Provider
+	if err := r.db.WithContext(ctx).Where("code = ?", code).First(&provider).Error; err != nil {
+		return nil, err
+	}
+	return &provider, nil
+}
+
 func (r *providerRepository) FindAll(ctx context.Context) ([]*domain.Provider, error) {
 	var providers []*domain.Provider
 	if err := r.db.WithContext(ctx).Find(&providers).Error; err != nil {

@@ -13,8 +13,9 @@ import (
 type LocalProvider struct {
 	info              *ProviderInfo
 	healthy           bool
-	phoneNumbersInUse map[string]*AssignedPhone // 已分配的手机号
+	phoneNumbersInUse map[string]*AssignedPhone // key: extId
 	codesReceived     map[string]*ReceivedCode  // 收到的验证码
+	extIdToPhone      map[string]string         // extId -> phone
 	mu                sync.RWMutex
 
 	// 配置参数
@@ -113,6 +114,7 @@ func NewLocalProviderWithConfig(id, name string, priority int, config LocalProvi
 		healthy:           true,
 		phoneNumbersInUse: make(map[string]*AssignedPhone),
 		codesReceived:     make(map[string]*ReceivedCode),
+		extIdToPhone:      make(map[string]string),
 		successRate:       config.SuccessRate,
 		minDelayMs:        config.MinDelayMs,
 		maxDelayMs:        config.MaxDelayMs,
@@ -273,8 +275,8 @@ func (lp *LocalProvider) GetPhone(ctx context.Context, businessType, cardType st
 	cost := 0.01 * float64(businessRule.CostFactor)
 
 	// 记录已分配的手机号
-	lp.mu.Lock()
-	lp.phoneNumbersInUse[phoneNumber] = &AssignedPhone{
+	extId := time.Now().Format("20060102150405") + "-" + phoneNumber + "-" + businessType + "-" + cardType
+	assignment := &AssignedPhone{
 		PhoneNumber:  phoneNumber,
 		CountryCode:  countryCode,
 		BusinessType: businessType,
@@ -283,7 +285,13 @@ func (lp *LocalProvider) GetPhone(ctx context.Context, businessType, cardType st
 		ExpiresAt:    time.Now().Add(30 * time.Minute),
 		Cost:         cost,
 	}
+	lp.mu.Lock()
+	lp.phoneNumbersInUse[extId] = assignment
+	lp.extIdToPhone[extId] = phoneNumber
 	lp.mu.Unlock()
+
+	fmt.Printf("[LocalProvider] Assigned phone extId=%s phone=%s business=%s card=%s\n",
+		extId, phoneNumber, businessType, cardType)
 
 	return &PhoneResponse{
 		PhoneNumber: phoneNumber,
@@ -291,6 +299,7 @@ func (lp *LocalProvider) GetPhone(ctx context.Context, businessType, cardType st
 		Cost:        cost,
 		ValidUntil:  time.Now().Add(30 * time.Minute),
 		ProviderID:  lp.info.ID,
+		ExtId:       extId,
 	}, nil
 }
 
@@ -323,13 +332,23 @@ func (lp *LocalProvider) ReleasePhone(ctx context.Context, phoneNumber string, e
 	lp.mu.Lock()
 	defer lp.mu.Unlock()
 
-	if _, exists := lp.phoneNumbersInUse[phoneNumber]; !exists {
+	if len(extId) == 0 || extId[0] == "" {
+		fmt.Printf("[LocalProvider] Release failed: phone=%s missing extId\n", phoneNumber)
+		return NewProviderError("INVALID_PHONE", "缺少 extId")
+	}
+
+	record, exists := lp.phoneNumbersInUse[extId[0]]
+	if !exists {
+		fmt.Printf("[LocalProvider] Release failed: extId=%s phone=%s not found\n", extId[0], phoneNumber)
 		return NewProviderError("INVALID_PHONE", "手机号未分配")
 	}
 
-	delete(lp.phoneNumbersInUse, phoneNumber)
-	delete(lp.codesReceived, phoneNumber)
-
+	delete(lp.phoneNumbersInUse, extId[0])
+	delete(lp.extIdToPhone, extId[0])
+	if record != nil && record.PhoneNumber != "" {
+		delete(lp.codesReceived, record.PhoneNumber)
+	}
+	fmt.Printf("[LocalProvider] Released phone extId=%s phone=%s\n", extId[0], record.PhoneNumber)
 	return nil
 }
 

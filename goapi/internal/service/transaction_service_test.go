@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"sms-platform/goapi/internal/domain"
+	"sms-platform/goapi/internal/repository"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -30,8 +33,21 @@ func createServiceTestTransaction(id int64, customerID int64, amount float32, ba
 	}
 }
 
+func createTestTx(t *testing.T) *gorm.DB {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	tx := db.Begin()
+	require.NoError(t, tx.Error)
+	return tx
+}
+
 func (m *MockTransactionRepository) Create(ctx context.Context, transaction *domain.Transaction) error {
 	args := m.Called(ctx, transaction)
+	return args.Error(0)
+}
+
+func (m *MockTransactionRepository) CreateWithTx(ctx context.Context, tx *gorm.DB, transaction *domain.Transaction) error {
+	args := m.Called(ctx, tx, transaction)
 	return args.Error(0)
 }
 
@@ -72,8 +88,37 @@ func (m *MockTransactionRepository) GetBalance(ctx context.Context, customerID i
 	return args.Get(0).(float64), args.Error(1)
 }
 
+func (m *MockTransactionRepository) GetBalanceDetail(ctx context.Context, customerID int64) (float64, float64, error) {
+	args := m.Called(ctx, customerID)
+	return args.Get(0).(float64), args.Get(1).(float64), args.Error(2)
+}
+
 func (m *MockTransactionRepository) GetBalanceForUpdate(ctx context.Context, tx *gorm.DB, customerID int64) (float64, error) {
 	return m.GetBalance(ctx, customerID)
+}
+
+func (m *MockTransactionRepository) ReserveBalance(ctx context.Context, tx *gorm.DB, customerID int64, amount float64) (*repository.BalanceChangeSnapshot, error) {
+	args := m.Called(ctx, tx, customerID, amount)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*repository.BalanceChangeSnapshot), args.Error(1)
+}
+
+func (m *MockTransactionRepository) CommitReservedBalance(ctx context.Context, tx *gorm.DB, customerID int64, amount float64) (*repository.BalanceChangeSnapshot, error) {
+	args := m.Called(ctx, tx, customerID, amount)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*repository.BalanceChangeSnapshot), args.Error(1)
+}
+
+func (m *MockTransactionRepository) ReleaseReservedBalance(ctx context.Context, tx *gorm.DB, customerID int64, amount float64) (*repository.BalanceChangeSnapshot, error) {
+	args := m.Called(ctx, tx, customerID, amount)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*repository.BalanceChangeSnapshot), args.Error(1)
 }
 
 func (m *MockTransactionRepository) Update(ctx context.Context, transaction *domain.Transaction) error {
@@ -110,7 +155,7 @@ func TestTransactionService_TopUp_Success(t *testing.T) {
 	assert.Equal(t, float32(amount), *transaction.Amount)
 	assert.Equal(t, float32(currentBalance), *transaction.BalanceBefore)
 	assert.Equal(t, float32(currentBalance+amount), *transaction.BalanceAfter)
-	assert.Equal(t, "1", *transaction.Type) // TopUp type
+	assert.Equal(t, domain.TransactionTypeTopUp, *transaction.Type)
 	assert.Equal(t, notes, *transaction.Notes)
 
 	mockRepo.AssertExpectations(t)
@@ -174,7 +219,7 @@ func TestTransactionService_Deduct_Success(t *testing.T) {
 	assert.Equal(t, float32(-amount), *transaction.Amount) // Deduct amounts should be negative
 	assert.Equal(t, float32(currentBalance), *transaction.BalanceBefore)
 	assert.Equal(t, float32(currentBalance-amount), *transaction.BalanceAfter)
-	assert.Equal(t, "2", *transaction.Type) // Deduct type
+	assert.Equal(t, domain.TransactionTypeDeduct, *transaction.Type)
 	assert.Equal(t, referenceID, *transaction.ReferenceID)
 	assert.Equal(t, notes, *transaction.Notes)
 
@@ -222,6 +267,154 @@ func TestTransactionService_Deduct_InvalidAmount(t *testing.T) {
 	assert.Nil(t, transaction)
 }
 
+func TestTransactionService_ReserveFunds_Success(t *testing.T) {
+	mockRepo := new(MockTransactionRepository)
+	service := NewTransactionService(mockRepo)
+	ctx := context.Background()
+
+	customerID := int64(1)
+	amount := 20.0
+	referenceID := int64(99)
+	notes := "reserve"
+
+	tx := createTestTx(t)
+	snapshot := &repository.BalanceChangeSnapshot{
+		BalanceBefore: 100,
+		BalanceAfter:  80,
+		FrozenBefore:  10,
+		FrozenAfter:   30,
+	}
+
+	mockRepo.On("BeginTx", ctx).Return(tx, nil)
+	mockRepo.On("ReserveBalance", ctx, tx, customerID, amount).Return(snapshot, nil)
+	mockRepo.On("CreateWithTx", ctx, tx, mock.AnythingOfType("*domain.Transaction")).Return(nil)
+
+	transaction, err := service.ReserveFunds(ctx, customerID, amount, referenceID, notes)
+	assert.NoError(t, err)
+	assert.NotNil(t, transaction)
+	assert.Equal(t, domain.TransactionTypeFreeze, *transaction.Type)
+	assert.Equal(t, float32(-amount), *transaction.Amount)
+	assert.Equal(t, float32(snapshot.BalanceAfter), *transaction.BalanceAfter)
+	assert.Equal(t, float32(snapshot.FrozenAfter), *transaction.FrozenAfter)
+
+	mockRepo.AssertExpectations(t)
+}
+
+func TestTransactionService_ReserveFunds_InsufficientBalance(t *testing.T) {
+	mockRepo := new(MockTransactionRepository)
+	service := NewTransactionService(mockRepo)
+	ctx := context.Background()
+
+	customerID := int64(1)
+	amount := 50.0
+	tx := createTestTx(t)
+
+	mockRepo.On("BeginTx", ctx).Return(tx, nil)
+	mockRepo.On("ReserveBalance", ctx, tx, customerID, amount).Return((*repository.BalanceChangeSnapshot)(nil), repository.ErrInsufficientBalance)
+
+	transaction, err := service.ReserveFunds(ctx, customerID, amount, 0, "reserve")
+	assert.ErrorIs(t, err, ErrInsufficientBalance)
+	assert.Nil(t, transaction)
+
+	mockRepo.AssertExpectations(t)
+}
+
+func TestTransactionService_CommitReservedFunds_Success(t *testing.T) {
+	mockRepo := new(MockTransactionRepository)
+	service := NewTransactionService(mockRepo)
+	ctx := context.Background()
+
+	customerID := int64(1)
+	amount := 10.0
+	tx := createTestTx(t)
+	snapshot := &repository.BalanceChangeSnapshot{
+		BalanceBefore: 80,
+		BalanceAfter:  80,
+		FrozenBefore:  25,
+		FrozenAfter:   15,
+	}
+
+	mockRepo.On("BeginTx", ctx).Return(tx, nil)
+	mockRepo.On("CommitReservedBalance", ctx, tx, customerID, amount).Return(snapshot, nil)
+	mockRepo.On("CreateWithTx", ctx, tx, mock.AnythingOfType("*domain.Transaction")).Return(nil)
+
+	transaction, err := service.CommitReservedFunds(ctx, customerID, amount, 10, "commit")
+	assert.NoError(t, err)
+	assert.NotNil(t, transaction)
+	assert.Equal(t, domain.TransactionTypeFreezeToCharge, *transaction.Type)
+	assert.Equal(t, float32(0), *transaction.Amount)
+	assert.Equal(t, float32(snapshot.FrozenAfter), *transaction.FrozenAfter)
+
+	mockRepo.AssertExpectations(t)
+}
+
+func TestTransactionService_CommitReservedFunds_InsufficientFrozen(t *testing.T) {
+	mockRepo := new(MockTransactionRepository)
+	service := NewTransactionService(mockRepo)
+	ctx := context.Background()
+
+	customerID := int64(1)
+	amount := 30.0
+	tx := createTestTx(t)
+
+	mockRepo.On("BeginTx", ctx).Return(tx, nil)
+	mockRepo.On("CommitReservedBalance", ctx, tx, customerID, amount).Return((*repository.BalanceChangeSnapshot)(nil), repository.ErrInsufficientFrozenFunds)
+
+	transaction, err := service.CommitReservedFunds(ctx, customerID, amount, 0, "commit")
+	assert.ErrorIs(t, err, ErrInsufficientFrozen)
+	assert.Nil(t, transaction)
+
+	mockRepo.AssertExpectations(t)
+}
+
+func TestTransactionService_ReleaseReservedFunds_Success(t *testing.T) {
+	mockRepo := new(MockTransactionRepository)
+	service := NewTransactionService(mockRepo)
+	ctx := context.Background()
+
+	customerID := int64(1)
+	amount := 15.0
+	tx := createTestTx(t)
+	snapshot := &repository.BalanceChangeSnapshot{
+		BalanceBefore: 60,
+		BalanceAfter:  75,
+		FrozenBefore:  20,
+		FrozenAfter:   5,
+	}
+
+	mockRepo.On("BeginTx", ctx).Return(tx, nil)
+	mockRepo.On("ReleaseReservedBalance", ctx, tx, customerID, amount).Return(snapshot, nil)
+	mockRepo.On("CreateWithTx", ctx, tx, mock.AnythingOfType("*domain.Transaction")).Return(nil)
+
+	transaction, err := service.ReleaseReservedFunds(ctx, customerID, amount, 0, "release")
+	assert.NoError(t, err)
+	assert.NotNil(t, transaction)
+	assert.Equal(t, domain.TransactionTypeUnfreeze, *transaction.Type)
+	assert.Equal(t, float32(amount), *transaction.Amount)
+	assert.Equal(t, float32(snapshot.BalanceAfter), *transaction.BalanceAfter)
+
+	mockRepo.AssertExpectations(t)
+}
+
+func TestTransactionService_ReleaseReservedFunds_InsufficientFrozen(t *testing.T) {
+	mockRepo := new(MockTransactionRepository)
+	service := NewTransactionService(mockRepo)
+	ctx := context.Background()
+
+	customerID := int64(1)
+	amount := 25.0
+	tx := createTestTx(t)
+
+	mockRepo.On("BeginTx", ctx).Return(tx, nil)
+	mockRepo.On("ReleaseReservedBalance", ctx, tx, customerID, amount).Return((*repository.BalanceChangeSnapshot)(nil), repository.ErrInsufficientFrozenFunds)
+
+	transaction, err := service.ReleaseReservedFunds(ctx, customerID, amount, 0, "release")
+	assert.ErrorIs(t, err, ErrInsufficientFrozen)
+	assert.Nil(t, transaction)
+
+	mockRepo.AssertExpectations(t)
+}
+
 func TestTransactionService_GetBalance_Success(t *testing.T) {
 	mockRepo := new(MockTransactionRepository)
 	service := NewTransactionService(mockRepo)
@@ -258,6 +451,39 @@ func TestTransactionService_GetBalance_Error(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
+func TestTransactionService_GetBalanceDetail_Success(t *testing.T) {
+	mockRepo := new(MockTransactionRepository)
+	service := NewTransactionService(mockRepo)
+	ctx := context.Background()
+
+	customerID := int64(1)
+	mockRepo.On("GetBalanceDetail", ctx, customerID).Return(200.0, 50.0, nil)
+
+	detail, err := service.GetBalanceDetail(ctx, customerID)
+	assert.NoError(t, err)
+	assert.NotNil(t, detail)
+	assert.Equal(t, 200.0, detail.Balance)
+	assert.Equal(t, 50.0, detail.FrozenAmount)
+
+	mockRepo.AssertExpectations(t)
+}
+
+func TestTransactionService_GetBalanceDetail_Error(t *testing.T) {
+	mockRepo := new(MockTransactionRepository)
+	service := NewTransactionService(mockRepo)
+	ctx := context.Background()
+
+	customerID := int64(1)
+	mockRepo.On("GetBalanceDetail", ctx, customerID).Return(0.0, 0.0, errors.New("db error"))
+
+	detail, err := service.GetBalanceDetail(ctx, customerID)
+	assert.Error(t, err)
+	assert.Nil(t, detail)
+	assert.Contains(t, err.Error(), "failed to get balance detail")
+
+	mockRepo.AssertExpectations(t)
+}
+
 func TestTransactionService_GetTransactionHistory_Success(t *testing.T) {
 	mockRepo := new(MockTransactionRepository)
 	service := NewTransactionService(mockRepo)
@@ -268,8 +494,8 @@ func TestTransactionService_GetTransactionHistory_Success(t *testing.T) {
 	offset := 0
 
 	expectedTransactions := []*domain.Transaction{
-		createServiceTestTransaction(1, customerID, 100, 0, 100, "1", ""),
-		createServiceTestTransaction(2, customerID, 50, 100, 50, "2", ""),
+		createServiceTestTransaction(1, customerID, 100, 0, 100, domain.TransactionTypeTopUp, ""),
+		createServiceTestTransaction(2, customerID, 50, 100, 50, domain.TransactionTypeDeduct, ""),
 	}
 	expectedTotal := int64(25)
 
@@ -315,8 +541,8 @@ func TestTransactionService_GetTransactionsByType_Success(t *testing.T) {
 	offset := 0
 
 	expectedTransactions := []*domain.Transaction{
-		createServiceTestTransaction(1, customerID, 100, 0, 100, "1", ""),
-		createServiceTestTransaction(3, customerID, 200, 100, 300, "1", ""),
+		createServiceTestTransaction(1, customerID, 100, 0, 100, domain.TransactionTypeTopUp, ""),
+		createServiceTestTransaction(3, customerID, 200, 100, 300, domain.TransactionTypeTopUp, ""),
 	}
 	expectedTotal := int64(15)
 
@@ -356,9 +582,9 @@ func TestTransactionService_GetTransactionsByDateRange_Success(t *testing.T) {
 	limit := 10
 	offset := 0
 
-	tx1 := createServiceTestTransaction(1, customerID, 100, 0, 100, "1", "")
+	tx1 := createServiceTestTransaction(1, customerID, 100, 0, 100, domain.TransactionTypeTopUp, "")
 	tx1.CreatedAt = startDate.Add(1 * time.Hour)
-	tx2 := createServiceTestTransaction(2, customerID, 50, 100, 50, "2", "")
+	tx2 := createServiceTestTransaction(2, customerID, 50, 100, 50, domain.TransactionTypeDeduct, "")
 	tx2.CreatedAt = endDate.Add(-1 * time.Hour)
 
 	expectedTransactions := []*domain.Transaction{tx1, tx2}

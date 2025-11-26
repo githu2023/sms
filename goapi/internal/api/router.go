@@ -58,6 +58,7 @@ func NewRouter(cfg config.Config) *gin.Engine { // Pass config to router
 
 	phoneService := service.NewPhoneService(
 		transactionRepo,
+		transactionService,
 		logRepo,
 		assignmentRepo,
 		customerBusinessConfigRepo,
@@ -65,6 +66,7 @@ func NewRouter(cfg config.Config) *gin.Engine { // Pass config to router
 		platformBusinessTypeRepo,
 		platformProviderBusinessMappingRepo,
 		providerBusinessTypeRepo,
+		providerRepo,
 		customerRepo,
 		db,
 	)
@@ -73,7 +75,7 @@ func NewRouter(cfg config.Config) *gin.Engine { // Pass config to router
 
 	// Initialize and start scheduler service
 	// 使用全局ProviderManager，通过ProviderID查找对应的provider
-	schedulerService := service.NewSchedulerService(cfg.Scheduler, assignmentRepo, providerRepo, transactionRepo, customerRepo, db)
+	schedulerService := service.NewSchedulerService(cfg.Scheduler, assignmentRepo, providerRepo, transactionService, customerRepo, db)
 	schedulerService.Start() // --- Initialize Handlers ---
 	userHandler := handler.NewUserHandler(userService, cfg.JWT)
 	businessHandler := handler.NewBusinessHandler(businessService)

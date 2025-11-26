@@ -27,6 +27,14 @@ func (m *MockProviderRepository) FindByID(ctx context.Context, id int) (*domain.
 	return args.Get(0).(*domain.Provider), args.Error(1)
 }
 
+func (m *MockProviderRepository) FindByCode(ctx context.Context, code string) (*domain.Provider, error) {
+	args := m.Called(ctx, code)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Provider), args.Error(1)
+}
+
 func (m *MockProviderRepository) FindAll(ctx context.Context) ([]*domain.Provider, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {

@@ -33,6 +33,7 @@ type ProfileResponse struct {
 	Username       string  `json:"username"`
 	Email          string  `json:"email"`
 	Balance        float64 `json:"balance"`
+	FrozenAmount   float64 `json:"frozen_amount"`
 	APISecretKey   string  `json:"api_secret_key"`
 	RegistrationIP string  `json:"registration_ip"`
 	LastLoginAt    string  `json:"last_login_at"`

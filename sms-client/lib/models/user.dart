@@ -3,6 +3,7 @@ class User {
   final String username;
   final String email;
   final double balance;
+  final double frozenAmount;
   final String? apiKey;
   final String? registrationIp;
   final DateTime? lastLoginAt;
@@ -14,6 +15,7 @@ class User {
     required this.username,
     required this.email,
     required this.balance,
+    this.frozenAmount = 0.0,
     this.apiKey,
     this.registrationIp,
     this.lastLoginAt,
@@ -27,6 +29,7 @@ class User {
       username: json['username'] as String? ?? '',
       email: json['email'] as String? ?? '',
       balance: (json['balance'] as num?)?.toDouble() ?? 0.0,
+      frozenAmount: (json['frozen_amount'] as num?)?.toDouble() ?? 0.0,
       apiKey: json['api_secret_key'] as String?,
       registrationIp: json['registration_ip'] as String?,
       lastLoginAt:
@@ -50,6 +53,7 @@ class User {
       'username': username,
       'email': email,
       'balance': balance,
+      'frozen_amount': frozenAmount,
       'api_secret_key': apiKey,
       'registration_ip': registrationIp,
       'last_login_at': lastLoginAt?.toIso8601String(),
@@ -63,6 +67,7 @@ class User {
     String? username,
     String? email,
     double? balance,
+    double? frozenAmount,
     String? apiKey,
     String? registrationIp,
     DateTime? lastLoginAt,
@@ -74,6 +79,7 @@ class User {
       username: username ?? this.username,
       email: email ?? this.email,
       balance: balance ?? this.balance,
+      frozenAmount: frozenAmount ?? this.frozenAmount,
       apiKey: apiKey ?? this.apiKey,
       registrationIp: registrationIp ?? this.registrationIp,
       lastLoginAt: lastLoginAt ?? this.lastLoginAt,

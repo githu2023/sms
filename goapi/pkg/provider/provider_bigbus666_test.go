@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // 测试配置
@@ -133,87 +136,111 @@ func TestBigBus666Provider_PadKey(t *testing.T) {
 
 // TestBigBus666Provider_GetPhone_Success 测试成功获取手机号（使用真实API）
 func TestBigBus666Provider_GetPhone_Success(t *testing.T) {
-	// 创建Provider（使用真实API地址）
+	// 使用本地 Provider 生成一个真实可用的手机号，避免去调用外部 BigBus666 API
+	localProvider := NewLocalProvider("local", "Local Provider", 1, nil)
+	ctx := context.Background()
+	localPhone, err := localProvider.GetPhone(ctx, "wechat", "physical")
+	require.NoError(t, err)
+	require.NotNil(t, localPhone)
+
+	// 准备一个 BigBus666 Provider 用于加密响应
+	encryptProvider := NewBigBus666Provider(BigBus666Config{
+		EncryptKey: testEncryptKey,
+	})
+
+	extID := "ext-" + localPhone.PhoneNumber
+
+	// 启动本地 HTTP Server 模拟 BigBus666 的 API
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, fmt.Sprintf("/n/%s", testCustomerOutNumber), r.URL.Path)
+
+		resp := map[string]interface{}{
+			"code":    0,
+			"message": "success",
+			"success": true,
+			"data": map[string]interface{}{
+				"extId":  extID,
+				"mobile": localPhone.PhoneNumber,
+			},
+		}
+
+		respJSON, _ := json.Marshal(resp)
+		encrypted, err := encryptProvider.encryptAES(string(respJSON))
+		require.NoError(t, err)
+
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(base64.StdEncoding.EncodeToString(encrypted)))
+	}))
+	defer server.Close()
+
 	provider := NewBigBus666Provider(BigBus666Config{
 		ID:                "test",
 		Name:              "Test Provider",
-		APIGateway:        testAPIGateway,
+		APIGateway:        server.URL,
 		CustomerOutNumber: testCustomerOutNumber,
 		EncryptKey:        testEncryptKey,
 		Priority:          100,
 		CostPerSMS:        1.0,
-		Timeout:           30 * time.Second,
+		Timeout:           5 * time.Second,
+		ProjectName:       testProjectName,
 	})
 
-	// 测试获取手机号
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	result, err := provider.GetPhone(ctx, testProjectName, "physical")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, localPhone.PhoneNumber, result.PhoneNumber)
+	require.Equal(t, extID, result.ExtId)
+	require.Equal(t, "test", result.ProviderID)
 
-	if err != nil {
-		t.Fatalf("获取手机号失败: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("返回结果为nil")
-	}
-
-	if result.PhoneNumber == "" {
-		t.Error("手机号为空")
-	}
-
-	if result.ProviderID != "test" {
-		t.Errorf("ProviderID不匹配: 期望 test, 得到 %s", result.ProviderID)
-	}
-
-	// 验证映射关系
+	// 验证内存映射
 	provider.mu.RLock()
-	extId, exists := provider.phoneToExtId[result.PhoneNumber]
+	mappedExtID, exists := provider.phoneToExtId[result.PhoneNumber]
 	provider.mu.RUnlock()
-
-	if !exists {
-		t.Error("手机号到extId的映射不存在")
-	}
-
-	if extId == "" {
-		t.Error("extId为空")
-	}
-
-	t.Logf("成功获取手机号: %s, extId: %s", result.PhoneNumber, extId)
+	require.True(t, exists)
+	require.Equal(t, extID, mappedExtID)
 }
 
 // TestBigBus666Provider_GetPhone_APIError 测试API错误（使用真实API，测试错误处理）
 // 注意：这个测试可能会因为真实API返回错误而失败，这是正常的
 func TestBigBus666Provider_GetPhone_APIError(t *testing.T) {
+	encryptProvider := NewBigBus666Provider(BigBus666Config{
+		EncryptKey: testEncryptKey,
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]interface{}{
+			"code":    500,
+			"message": "参数错误",
+			"success": false,
+		}
+		respJSON, _ := json.Marshal(resp)
+		encrypted, err := encryptProvider.encryptAES(string(respJSON))
+		require.NoError(t, err)
+
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(base64.StdEncoding.EncodeToString(encrypted)))
+	}))
+	defer server.Close()
+
 	provider := NewBigBus666Provider(BigBus666Config{
 		ID:                "test",
 		Name:              "Test Provider",
-		APIGateway:        testAPIGateway,
+		APIGateway:        server.URL,
 		CustomerOutNumber: testCustomerOutNumber,
 		EncryptKey:        testEncryptKey,
 		Priority:          100,
 		CostPerSMS:        1.0,
-		Timeout:           30 * time.Second,
+		Timeout:           5 * time.Second,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	ctx := context.Background()
+	result, err := provider.GetPhone(ctx, testProjectName, "physical")
 
-	result, err := provider.GetPhone(ctx, "invalid_project", "physical")
-
-	// 真实API可能会返回错误，这是正常的
-	// 我们主要测试错误处理逻辑是否正确
-	if err != nil {
-		t.Logf("API返回错误（这是正常的）: %v", err)
-		if !IsProviderError(err) {
-			t.Error("期望ProviderError类型")
-		}
-	}
-
-	if result != nil && err == nil {
-		t.Logf("意外成功获取手机号: %s", result.PhoneNumber)
-	}
+	require.Error(t, err)
+	require.Nil(t, result)
+	require.True(t, IsProviderError(err))
 }
 
 // TestBigBus666Provider_GetCode_Success 测试成功获取验证码

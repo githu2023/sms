@@ -16,9 +16,9 @@ type Customer struct {
 	Email          *string        `gorm:"type:varchar(255);comment:客户端登录邮箱" json:"email"`
 	PasswordHash   *string        `gorm:"type:varchar(255);comment:客户端登录用的密码哈希" json:"password_hash"`
 	APISecretKey   string         `gorm:"type:varchar(255);not null;comment:用于生成API Token的唯一密钥" json:"api_secret_key"`
-	Balance        float64        `gorm:"type:decimal(10,2);default:0.00;comment:客户余额" json:"balance"`
+	Balance        float64        `gorm:"type:decimal(10,2);default:0.00;comment:客户余额;index:idx_customers_balance_frozen" json:"balance"`
 	ParentID       *int64         `gorm:"comment:上级商户ID" json:"parent_id"`
-	FrozenAmount   float64        `gorm:"type:decimal(10,2);default:0.00;comment:冻结金额" json:"frozen_amount"`
+	FrozenAmount   float64        `gorm:"type:decimal(10,2);default:0.00;comment:冻结金额;index:idx_customers_balance_frozen" json:"frozen_amount"`
 	Status         *bool          `gorm:"comment:客户状态 (true:正常, false:冻结)" json:"status"`
 	RegistrationIP *string        `gorm:"type:varchar(45);comment:注册时的IP地址" json:"registration_ip"`
 	LastLoginIP    *string        `gorm:"type:varchar(45);comment:最后一次登录的IP地址" json:"last_login_ip"`
