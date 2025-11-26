@@ -6,3 +6,8 @@ sms-client/nginx_flutter.conf
 sms-client/web/index.html
 goapi/logs
 build
+admin-server/build
+admin-server/web/dist
+admin-server/server/server
+goapi/build
+sms-client/build
