@@ -181,9 +181,26 @@ jobs:
             ${{ runner.os }}-node-
         continue-on-error: true
 
+      - name: Check for package-lock.json
+        working-directory: admin-server/web
+        id: check_lockfile
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "lockfile_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "lockfile_exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Install dependencies
         working-directory: admin-server/web
-        run: npm ci
+        run: |
+          if [ "${{ steps.check_lockfile.outputs.lockfile_exists }}" == "true" ]; then
+            echo "Using npm ci (package-lock.json found)"
+            npm ci
+          else
+            echo "Using npm install (no package-lock.json found)"
+            npm install
+          fi
 
       - name: Build Vue project
         working-directory: admin-server/web
