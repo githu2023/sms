@@ -65,10 +65,35 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             # 手动触发时，根据输入决定
-            echo "admin-server-go=${{ github.event.inputs.build_admin_server_go }}" >> $GITHUB_OUTPUT
-            echo "admin-server-web=${{ github.event.inputs.build_admin_server_web }}" >> $GITHUB_OUTPUT
-            echo "goapi=${{ github.event.inputs.build_goapi }}" >> $GITHUB_OUTPUT
-            echo "sms-client=${{ github.event.inputs.build_sms_client }}" >> $GITHUB_OUTPUT
+            # 如果选择 auto，则构建所有项目
+            ADMIN_GO="${{ github.event.inputs.build_admin_server_go }}"
+            ADMIN_WEB="${{ github.event.inputs.build_admin_server_web }}"
+            GOAPI="${{ github.event.inputs.build_goapi }}"
+            SMS_CLIENT="${{ github.event.inputs.build_sms_client }}"
+            
+            if [ "$ADMIN_GO" == "auto" ] || [ "$ADMIN_GO" == "true" ]; then
+              echo "admin-server-go=true" >> $GITHUB_OUTPUT
+            else
+              echo "admin-server-go=false" >> $GITHUB_OUTPUT
+            fi
+            
+            if [ "$ADMIN_WEB" == "auto" ] || [ "$ADMIN_WEB" == "true" ]; then
+              echo "admin-server-web=true" >> $GITHUB_OUTPUT
+            else
+              echo "admin-server-web=false" >> $GITHUB_OUTPUT
+            fi
+            
+            if [ "$GOAPI" == "auto" ] || [ "$GOAPI" == "true" ]; then
+              echo "goapi=true" >> $GITHUB_OUTPUT
+            else
+              echo "goapi=false" >> $GITHUB_OUTPUT
+            fi
+            
+            if [ "$SMS_CLIENT" == "auto" ] || [ "$SMS_CLIENT" == "true" ]; then
+              echo "sms-client=true" >> $GITHUB_OUTPUT
+            else
+              echo "sms-client=false" >> $GITHUB_OUTPUT
+            fi
           else
             # 自动检测变更
             if [ "${{ github.event_name }}" == "pull_request" ]; then
@@ -110,7 +135,7 @@ jobs:
     name: Build Admin Server (Go)
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: needs.detect-changes.outputs.admin-server-go == 'true' || (needs.detect-changes.outputs.admin-server-go == 'auto' && github.event_name == 'workflow_dispatch')
+    if: needs.detect-changes.outputs.admin-server-go == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -137,7 +162,7 @@ jobs:
     name: Build Admin Server Web (Vue)
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: needs.detect-changes.outputs.admin-server-web == 'true' || (needs.detect-changes.outputs.admin-server-web == 'auto' && github.event_name == 'workflow_dispatch')
+    if: needs.detect-changes.outputs.admin-server-web == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -175,7 +200,7 @@ jobs:
     name: Build GoAPI (Go)
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: needs.detect-changes.outputs.goapi == 'true' || (needs.detect-changes.outputs.goapi == 'auto' && github.event_name == 'workflow_dispatch')
+    if: needs.detect-changes.outputs.goapi == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -202,7 +227,7 @@ jobs:
     name: Build SMS Client (Flutter)
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: needs.detect-changes.outputs.sms-client == 'true' || (needs.detect-changes.outputs.sms-client == 'auto' && github.event_name == 'workflow_dispatch')
+    if: needs.detect-changes.outputs.sms-client == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
