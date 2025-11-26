@@ -397,7 +397,7 @@ class _GetCodePageState extends State<GetCodePage> {
     final statusColor = _statusColor(status);
     return Chip(
       label: Text(label),
-      backgroundColor: statusColor.withValues(alpha: 0.15),
+      backgroundColor: statusColor.withOpacity(0.15),
       labelStyle: TextStyle(
         color: statusColor,
         fontWeight: FontWeight.bold,

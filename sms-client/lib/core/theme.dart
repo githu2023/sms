@@ -33,10 +33,9 @@ class AppTheme {
       centerTitle: false,
     ),
 
-    cardTheme: CardThemeData(
-      color: cardBackground,
+    cardTheme: const CardThemeData(
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
     ),
 
     elevatedButtonTheme: ElevatedButtonThemeData(
@@ -94,10 +93,10 @@ class AppTheme {
       centerTitle: false,
     ),
 
-    cardTheme: CardThemeData(
-      color: const Color(0xFF333333),
+    cardTheme: const CardThemeData(
+      color: Color(0xFF333333),
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
     ),
 
     elevatedButtonTheme: ElevatedButtonThemeData(

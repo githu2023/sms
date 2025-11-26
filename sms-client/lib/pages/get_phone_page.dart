@@ -677,7 +677,7 @@ class _GetPhonePageState extends State<GetPhonePage> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
+                  color: Colors.green.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.green, width: 2),
                 ),
