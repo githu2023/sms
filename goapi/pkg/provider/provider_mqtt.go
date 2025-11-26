@@ -141,10 +141,13 @@ func (p *MQTTProvider) GetPhone(ctx context.Context, businessType, cardType stri
 	}
 
 	// 解析响应
+	// 注意：运营商可能返回成功响应 {"number":"...","extId":"...","id":1}
+	// 也可能返回错误响应 {"id":-1,"msg":"error key"}
 	var apiResponse struct {
 		Number string `json:"number"`
 		ExtId  string `json:"extId"`
 		ID     int    `json:"id"`
+		Msg    string `json:"msg"` // 错误消息字段
 	}
 
 	if err := json.Unmarshal(respBody, &apiResponse); err != nil {
@@ -153,8 +156,23 @@ func (p *MQTTProvider) GetPhone(ctx context.Context, businessType, cardType stri
 		return nil, fmt.Errorf("解析响应失败: %w", err)
 	}
 
+	// 先检查是否是错误响应（id < 0 或 msg 不为空）
+	if apiResponse.ID < 0 || apiResponse.Msg != "" {
+		errorMsg := apiResponse.Msg
+		if errorMsg == "" {
+			errorMsg = fmt.Sprintf("运营商返回错误，id=%d", apiResponse.ID)
+		}
+		zap.S().Errorf("[MQTTProvider] ========== 获取手机号 - 运营商返回错误 ==========")
+		zap.S().Errorf("[MQTTProvider] 错误详情: id=%d, msg=%s", apiResponse.ID, errorMsg)
+		zap.S().Errorf("[MQTTProvider] 完整响应数据(JSON): %s", string(respBody))
+		zap.S().Errorf("[MQTTProvider] ========== 错误信息结束 ==========")
+		return nil, NewProviderError("API_ERROR", errorMsg)
+	}
+
+	// 检查成功响应是否包含必要字段
 	if apiResponse.Number == "" || apiResponse.ExtId == "" {
-		zap.S().Warnf("[MQTTProvider] 返回数据不完整: number=%s, extId=%s", apiResponse.Number, apiResponse.ExtId)
+		zap.S().Warnf("[MQTTProvider] 返回数据不完整: number=%s, extId=%s, id=%d", apiResponse.Number, apiResponse.ExtId, apiResponse.ID)
+		zap.S().Warnf("[MQTTProvider] 完整响应数据(JSON): %s", string(respBody))
 		zap.S().Warnf("[MQTTProvider] ========== 获取手机号 - 失败 ==========")
 		return nil, NewProviderError("INVALID_RESPONSE", "返回数据不完整")
 	}
