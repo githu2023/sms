@@ -99,7 +99,7 @@ func (p *MQTTProvider) GetPhone(ctx context.Context, businessType, cardType stri
 	zap.S().Infof("[MQTTProvider] 请求参数: businessType=%s, cardType=%s, id=%s", businessType, cardType, p.id)
 
 	// 构建URL
-	apiURL := fmt.Sprintf("%s/mqtt/msg/getNumber?id=%s&key=%s", p.apiGateway, url.QueryEscape(p.id), url.QueryEscape(p.key))
+	apiURL := fmt.Sprintf("%s/mqtt/msg/getNumber?id=%s&key=%s", p.apiGateway, url.QueryEscape(businessType), url.QueryEscape(p.key))
 	zap.S().Infof("[MQTTProvider] 请求URL: %s", apiURL)
 
 	// 创建HTTP请求

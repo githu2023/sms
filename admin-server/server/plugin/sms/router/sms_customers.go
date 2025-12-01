@@ -25,6 +25,7 @@ func (r *smsCustomers) Init(public *gin.RouterGroup, private *gin.RouterGroup) {
 		group := private.Group("smsCustomers")
 		group.GET("findSmsCustomers", apiSmsCustomers.FindSmsCustomers)       // 根据ID获取商户
 		group.GET("getSmsCustomersList", apiSmsCustomers.GetSmsCustomersList) // 获取商户列表
+		group.GET("getBusinessConfig", apiSmsCustomers.GetBusinessConfig)     // 获取商户业务配置
 	}
 	{
 		group := public.Group("smsCustomers")

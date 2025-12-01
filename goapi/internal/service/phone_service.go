@@ -170,7 +170,7 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 		zap.String("provider_name", providerInfo.Name),
 		zap.String("provider_type", providerInfo.Type))
 
-	// 5. 查询运营商业务类型，获取价格
+	// 5. 查询运营商业务类型，获取运营商成本价格
 	providerBusinessType, err := s.providerBusinessTypeRepo.FindByProviderCodeAndBusinessCode(
 		ctx, *selectedMapping.ProviderCode, *selectedMapping.BusinessCode)
 	if err != nil {
@@ -186,16 +186,27 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 		return nil, common.CodeProviderBusinessNotFound
 	}
 
-	costPerPhone := providerInfo.CostPerSMS
+	// 获取运营商成本（ProviderCost）
+	providerCost := providerInfo.CostPerSMS
 	if providerBusinessType.Price != nil && *providerBusinessType.Price > 0 {
-		costPerPhone = *providerBusinessType.Price
+		providerCost = *providerBusinessType.Price
 	}
-	if costPerPhone <= 0 {
-		costPerPhone = 0.01
+	if providerCost <= 0 {
+		providerCost = 0.01
 	}
 
-	// 6. 判断 COST * count 是否超过了客户端的余额
-	totalCost := costPerPhone * float64(count)
+	// 获取商户费用（MerchantFee），从客户业务配置的 cost 字段获取
+	merchantFeePerPhone := customerConfig.Cost
+	if merchantFeePerPhone <= 0 {
+		global.LogWarn("客户业务配置的 cost 为 0，使用运营商成本作为默认值",
+			zap.Int64("customer_id", customerID),
+			zap.String("business_code", customerConfig.BusinessCode),
+			zap.Float64("provider_cost", providerCost))
+		merchantFeePerPhone = providerCost
+	}
+
+	// 6. 判断商户费用 * count 是否超过了客户端的余额
+	totalCost := merchantFeePerPhone * float64(count)
 	balance, err := s.transactionRepo.GetBalance(ctx, customerID)
 	if err != nil {
 		s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone", fmt.Sprintf("Balance check error: %v", err))
@@ -218,7 +229,7 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 		reserveNotes := fmt.Sprintf("预冻结手机号: 业务=%s, card=%s, attempt=%d/%d",
 			customerConfig.BusinessName, cardType, i+1, count)
 
-		reserveTx, err := s.transactionService.ReserveFunds(ctx, customerID, costPerPhone, 0, reserveNotes)
+		reserveTx, err := s.transactionService.ReserveFunds(ctx, customerID, merchantFeePerPhone, 0, reserveNotes)
 		if err != nil {
 			if errors.Is(err, ErrInsufficientBalance) {
 				s.apiLogger.LogInsufficientBalance(ctx, customerID, "/api/phone/get_phone",
@@ -248,6 +259,9 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 			zap.String("provider_id", providerInfo.ID),
 			zap.String("business_code", *selectedMapping.BusinessCode),
 			zap.String("card_type", cardType),
+			zap.Float64("merchant_fee", merchantFeePerPhone),
+			zap.Float64("provider_cost", providerCost),
+			zap.Float64("profit", merchantFeePerPhone-providerCost),
 			zap.Int("attempt", i+1),
 			zap.Int("total_count", count))
 
@@ -269,7 +283,7 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 
 			releaseNotes := fmt.Sprintf("释放预冻结（服务商失败）: provider=%s, error=%v",
 				*selectedMapping.ProviderCode, err)
-			releaseTx, releaseErr := s.transactionService.ReleaseReservedFunds(ctx, customerID, costPerPhone, 0, releaseNotes)
+			releaseTx, releaseErr := s.transactionService.ReleaseReservedFunds(ctx, customerID, merchantFeePerPhone, 0, releaseNotes)
 			if releaseErr != nil {
 				global.LogError("释放预冻结失败",
 					zap.Int64("customer_id", customerID),
@@ -280,17 +294,26 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 			continue
 		}
 
+		// 计算利润
+		profit := merchantFeePerPhone - providerCost
+		if profit < 0 {
+			profit = 0
+		}
+
 		global.LogInfo("运营商接口调用成功",
 			zap.Int64("customer_id", customerID),
 			zap.String("provider_code", *selectedMapping.ProviderCode),
 			zap.String("phone_number", phoneResponse.PhoneNumber),
 			zap.String("ext_id", phoneResponse.ExtId),
-			zap.Float64("cost", phoneResponse.Cost))
+			zap.Float64("merchant_fee", merchantFeePerPhone),
+			zap.Float64("provider_cost", providerCost),
+			zap.Float64("profit", profit))
 
 		// 8. 如果获取到手机号成功，记录到数据库
-		providerCost := costPerPhone
-		merchantFee := providerCost
-		profit := 0.0
+		// ProviderCost: 运营商成本
+		// MerchantFee: 商户费用（从 customerConfig.Cost 获取）
+		// Profit: 利润 = MerchantFee - ProviderCost（已在上面计算）
+		merchantFee := merchantFeePerPhone
 		pendingStatus := "pending"
 		remark := fmt.Sprintf("业务：%s (%s)，提供商：%s，子业务：%s",
 			customerConfig.BusinessName, customerConfig.BusinessCode, *selectedMapping.ProviderCode, *selectedMapping.BusinessCode)
@@ -334,7 +357,7 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 		}
 
 		if err := s.assignmentRepo.Create(ctx, nil, assignment); err != nil {
-			s.transactionService.ReleaseReservedFunds(ctx, customerID, costPerPhone, 0,
+			s.transactionService.ReleaseReservedFunds(ctx, customerID, merchantFeePerPhone, 0,
 				fmt.Sprintf("释放预冻结（保存号码失败）: %v", err))
 			s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
 				fmt.Sprintf("Assignment creation error: %v", err))
@@ -346,12 +369,12 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 		}
 
 		commitNotes := fmt.Sprintf("冻结转消费: assignment_id=%d", assignment.ID)
-		if _, err := s.transactionService.CommitReservedFunds(ctx, customerID, providerCost, assignment.ID, commitNotes); err != nil {
+		if _, err := s.transactionService.CommitReservedFunds(ctx, customerID, merchantFeePerPhone, assignment.ID, commitNotes); err != nil {
 			global.LogError("冻结转实扣失败",
 				zap.Int64("customer_id", customerID),
 				zap.Int64("assignment_id", assignment.ID),
 				zap.Error(err))
-			s.transactionService.ReleaseReservedFunds(ctx, customerID, providerCost, assignment.ID,
+			s.transactionService.ReleaseReservedFunds(ctx, customerID, merchantFeePerPhone, assignment.ID,
 				fmt.Sprintf("释放预冻结（转消费失败）: %v", err))
 			failStatus := "failed"
 			assignment.Status = &failStatus
@@ -363,10 +386,11 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 		}
 
 		// 添加到结果
+		// 注意：返回给客户端的 Cost 应该是商户费用（MerchantFee），而不是运营商成本
 		results = append(results, &GetPhoneResult{
 			PhoneNumber: phoneResponse.PhoneNumber,
 			CountryCode: phoneResponse.CountryCode,
-			Cost:        providerCost,
+			Cost:        merchantFeePerPhone, // 返回商户费用，而不是运营商成本
 			ValidUntil:  phoneResponse.ValidUntil,
 			ProviderID:  phoneResponse.ProviderID,
 			Balance:     currentBalance,

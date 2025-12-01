@@ -291,16 +291,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get codesSummary => 'Verification Summary';
 
   @override
-  String get enterPhonesHint => 'Enter multiple phone numbers separated by newline or comma';
+  String get enterPhonesHint =>
+      'Enter multiple phone numbers separated by newline or comma';
 
   @override
   String get enterPhonesHelper => 'Up to 10 phone numbers per request';
 
   @override
-  String get invalidPhoneInput => 'Please enter between 1 and 10 valid phone numbers';
+  String get invalidPhoneInput =>
+      'Please enter between 1 and 10 valid phone numbers';
 
   @override
-  String get noCodesYet => 'No verification codes yet. Keep polling if status is pending.';
+  String get noCodesYet =>
+      'No verification codes yet. Keep polling if status is pending.';
 
   @override
   String get messageLabel => 'Message';
@@ -321,7 +324,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusFailed => 'Failed';
 
   @override
-  String get getCodeInstructions => 'Enter up to 10 phone numbers. If the status is pending, continue polling this interface.';
+  String get getCodeInstructions =>
+      'Enter up to 10 phone numbers. If the status is pending, continue polling this interface.';
 
   @override
   String get currentPasswordLabel => 'Current Password';
@@ -336,7 +340,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get passwordTooShort => 'Password must be at least 6 characters';
 
   @override
-  String get passwordUnchanged => 'New password must be different from current password';
+  String get passwordUnchanged =>
+      'New password must be different from current password';
 
   @override
   String get passwordMismatch => 'Passwords do not match';
@@ -378,7 +383,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get recentRecords => 'Recent Records';
 
   @override
-  String get pullDownToRefresh => 'Pull down to refresh, scroll up to load more';
+  String get pullDownToRefresh =>
+      'Pull down to refresh, scroll up to load more';
 
   @override
   String get noMoreData => 'No more data';
@@ -401,7 +407,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loadingFailed => 'Loading failed';
 
   @override
-  String get noAvailableBusinessTypes => 'No business types available, please contact administrator';
+  String get noAvailableBusinessTypes =>
+      'No business types available, please contact administrator';
 
   @override
   String get getBusinessTypesFailed => 'Failed to get business types';

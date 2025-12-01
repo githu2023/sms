@@ -155,3 +155,19 @@ export const adjustFrozenAmountSmsCustomers = (data) => {
     data
   })
 }
+
+// @Tags SmsCustomers
+// @Summary 获取商户业务配置
+// @Security ApiKeyAuth
+// @Accept application/json
+// @Produce application/json
+// @Param customerId query int true "商户ID"
+// @Success 200 {object} response.Response{data=[]model.SmsCustomerBusinessConfig} "获取成功"
+// @Router /smsCustomers/getBusinessConfig [get]
+export const getBusinessConfigSmsCustomers = (params) => {
+  return service({
+    url: '/smsCustomers/getBusinessConfig',
+    method: 'get',
+    params
+  })
+}

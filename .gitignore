@@ -11,3 +11,4 @@ admin-server/web/dist
 admin-server/server/server
 goapi/build
 sms-client/build
+goapi/main

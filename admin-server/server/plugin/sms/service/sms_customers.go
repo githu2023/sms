@@ -254,25 +254,55 @@ func (s *smsCustomers) ConfigureBusiness(ctx context.Context, req *request.Confi
 		}
 	}()
 
-	// 1. 先删除该客户的所有业务配置
-	if err := tx.Where("customer_id = ?", req.CustomerID).Delete(&model.SmsCustomerBusinessConfig{}).Error; err != nil {
+	// 获取当前已配置的业务ID列表
+	var existingConfigs []model.SmsCustomerBusinessConfig
+	if err := tx.Where("customer_id = ?", req.CustomerID).Find(&existingConfigs).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	// 2. 批量插入新的业务配置
+	// 创建已配置业务的映射表（platformBusinessTypeId -> config）
+	existingMap := make(map[int64]*model.SmsCustomerBusinessConfig)
+	for i := range existingConfigs {
+		existingMap[existingConfigs[i].PlatformBusinessTypeID] = &existingConfigs[i]
+	}
+
+	// 创建新配置的映射表
+	newConfigMap := make(map[int64]bool)
 	for _, item := range req.BusinessConfig {
-		config := &model.SmsCustomerBusinessConfig{
-			CustomerID:             req.CustomerID,
-			PlatformBusinessTypeID: item.PlatformBusinessTypeID,
-			BusinessCode:           item.BusinessCode,
-			BusinessName:           item.BusinessName,
-			Weight:                 item.Weight,
-			Status:                 item.Status,
-		}
-		if err := tx.Create(config).Error; err != nil {
-			tx.Rollback()
-			return err
+		newConfigMap[item.PlatformBusinessTypeID] = true
+	}
+
+	// 处理每个业务配置：更新已存在的，插入新的
+	for _, item := range req.BusinessConfig {
+		if existing, found := existingMap[item.PlatformBusinessTypeID]; found {
+			// 已存在，更新
+			updates := map[string]interface{}{
+				"business_code": item.BusinessCode,
+				"business_name": item.BusinessName,
+				"cost":          item.Cost,
+				"weight":        item.Weight,
+				"status":        item.Status,
+			}
+			if err := tx.Model(existing).Updates(updates).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+		} else {
+			// 不存在，插入
+			config := &model.SmsCustomerBusinessConfig{
+				CustomerID:             req.CustomerID,
+				PlatformBusinessTypeID: item.PlatformBusinessTypeID,
+				BusinessCode:           item.BusinessCode,
+				BusinessName:           item.BusinessName,
+				Cost:                   item.Cost,
+				Weight:                 item.Weight,
+				Status:                 item.Status,
+			}
+			if err := tx.Create(config).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
 		}
 	}
 

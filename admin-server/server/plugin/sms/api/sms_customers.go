@@ -237,9 +237,15 @@ func (a *smsCustomers) ConfigureBusiness(c *gin.Context) {
 	var req request.ConfigureBusinessReq
 	err := c.ShouldBindJSON(&req)
 	if err != nil {
-		response.FailWithMessage(err.Error(), c)
+		global.GVA_LOG.Error("配置业务参数绑定失败!", zap.Error(err), zap.Any("request", c.Request.Body))
+		response.FailWithMessage("参数错误: "+err.Error(), c)
 		return
 	}
+
+	global.GVA_LOG.Info("收到业务配置请求",
+		zap.Int64("customerId", req.CustomerID),
+		zap.Int("businessCount", len(req.BusinessConfig)),
+		zap.Any("businessConfig", req.BusinessConfig))
 
 	err = serviceSmsCustomers.ConfigureBusiness(ctx, &req)
 	if err != nil {
@@ -276,4 +282,53 @@ func (a *smsCustomers) AdjustFrozenAmount(c *gin.Context) {
 		return
 	}
 	response.OkWithMessage("调整成功", c)
+}
+
+// GetBusinessConfig 获取商户业务配置
+// @Tags SmsCustomers
+// @Summary 获取商户业务配置
+// @Security ApiKeyAuth
+// @Accept application/json
+// @Produce application/json
+// @Param customerId query int true "商户ID"
+// @Success 200 {object} response.Response{data=[]model.SmsCustomerBusinessConfig} "获取成功"
+// @Router /smsCustomers/getBusinessConfig [get]
+func (a *smsCustomers) GetBusinessConfig(c *gin.Context) {
+	customerID := c.Query("customerId")
+	if customerID == "" {
+		response.FailWithMessage("商户ID不能为空", c)
+		return
+	}
+
+	var configs []model.SmsCustomerBusinessConfig
+	err := global.GVA_DB.Where("customer_id = ?", customerID).Find(&configs).Error
+	if err != nil {
+		global.GVA_LOG.Error("获取业务配置失败!", zap.Error(err))
+		response.FailWithMessage("获取失败:"+err.Error(), c)
+		return
+	}
+
+	// 构造响应数据，确保字段类型正确
+	type BusinessConfigResponse struct {
+		PlatformBusinessTypeID int64   `json:"platformBusinessTypeId"`
+		BusinessCode           string  `json:"businessCode"`
+		BusinessName           string  `json:"businessName"`
+		Cost                   float64 `json:"cost"`
+		Weight                 int32   `json:"weight"`
+		Status                 int     `json:"status"`
+	}
+
+	result := make([]BusinessConfigResponse, len(configs))
+	for i, config := range configs {
+		result[i] = BusinessConfigResponse{
+			PlatformBusinessTypeID: config.PlatformBusinessTypeID,
+			BusinessCode:           config.BusinessCode,
+			BusinessName:           config.BusinessName,
+			Cost:                   config.Cost,
+			Weight:                 config.Weight,
+			Status:                 config.Status,
+		}
+	}
+
+	response.OkWithData(result, c)
 }

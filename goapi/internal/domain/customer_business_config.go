@@ -17,6 +17,7 @@ type CustomerBusinessConfig struct {
 	PlatformBusinessTypeID int64          `gorm:"not null;comment:平台业务类型ID" json:"platform_business_type_id"`
 	BusinessCode           string         `gorm:"type:varchar(50);not null;comment:业务编码;index" json:"business_code"`
 	BusinessName           string         `gorm:"type:varchar(255);not null;comment:业务名称" json:"business_name"`
+	Cost                   float64        `gorm:"type:decimal(10,4);not null;default:0.0000;comment:业务成本（单价）" json:"cost"`
 	Weight                 int            `gorm:"not null;default:1;comment:权重（用于随机选择，权重越高被选中概率越大）" json:"weight"`
 	Status                 *bool          `gorm:"default:true;comment:是否启用" json:"status"`
 }

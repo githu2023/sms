@@ -357,39 +357,65 @@
              </el-form-item>
              
              <el-form-item label="选择平台业务类型">
-                <el-button type="primary" @click="openBusinessTypeSelector">选择业务类型</el-button>
-                <div class="mt-2">
+                <el-button type="primary" icon="Plus" @click="openBusinessTypeSelector">+ 添加业务类型</el-button>
+                <div class="mt-2" v-if="businessConfigForm.businessConfig.length > 0">
+                  <div class="text-sm text-gray-600 mb-2">已选择 {{ businessConfigForm.businessConfig.length }} 个业务类型：</div>
                   <el-tag 
                     v-for="(item, index) in businessConfigForm.businessConfig" 
                     :key="index"
                     closable
                     @close="removeBusinessConfig(index)"
                     class="mr-2 mb-2"
+                    type="success"
                   >
                     {{ item.businessName || item.name }}
                   </el-tag>
                 </div>
              </el-form-item>
 
-             <el-divider />
+             <el-divider v-if="businessConfigForm.businessConfig.length > 0" content-position="left">
+               <span class="text-primary font-semibold">👇 请为每个业务配置价格</span>
+             </el-divider>
              
-             <div v-for="(item, index) in businessConfigForm.businessConfig" :key="index" class="mb-4 p-3 border rounded">
-                <h4 class="font-semibold mb-2">{{ item.businessName || item.name }} ({{ item.businessCode || item.code }})</h4>
-                <el-form-item :label="`权重`" :prop="`businessConfig.${index}.weight`">
+             <div v-for="(item, index) in businessConfigForm.businessConfig" :key="index" class="mb-4 p-4 border-2 rounded-lg shadow-sm transition-all" :class="item.status === 1 ? 'border-blue-200 bg-blue-50' : 'border-gray-300 bg-gray-100 opacity-60'">
+                <div class="flex justify-between items-center mb-3">
+                  <h4 class="font-bold text-lg" :class="item.status === 1 ? 'text-gray-800' : 'text-gray-400'">{{ item.businessName || item.name }}</h4>
+                  <div class="flex gap-2">
+                    <el-tag size="small" :type="item.status === 1 ? 'primary' : 'info'">{{ item.businessCode || item.code }}</el-tag>
+                    <el-tag size="small" :type="item.status === 1 ? 'success' : 'info'">{{ item.status === 1 ? '启用中' : '已禁用' }}</el-tag>
+                  </div>
+                </div>
+                
+                <el-form-item label="💰 业务成本（单价）" :prop="`businessConfig.${index}.cost`" required>
                   <el-input-number 
-                    v-model="item.weight" 
-                    :min="1"
-                    :step="1"
+                    v-model="item.cost" 
+                    :min="0"
+                    :precision="4"
+                    :step="0.01"
                     style="width: 100%"
+                    :controls-position="'right'"
+                    placeholder="请输入单价"
                   />
-                  <div class="text-xs text-gray-500 mt-1">权重越高，该业务被选中的概率越大</div>
+                  <div class="text-xs text-orange-600 mt-1 font-semibold">⚠️ 每次使用此业务将扣除的费用</div>
                 </el-form-item>
-                <el-form-item label="状态">
-                  <el-switch v-model="item.status" active-text="启用" inactive-text="禁用" />
+                
+                <el-form-item label="🔘 状态">
+                  <el-switch 
+                    v-model="item.status" 
+                    :active-value="1" 
+                    :inactive-value="0"
+                    active-text="启用" 
+                    inactive-text="禁用" 
+                  />
                 </el-form-item>
              </div>
 
-             <el-empty v-if="businessConfigForm.businessConfig.length === 0" description="请选择业务类型" />
+             <el-empty v-if="businessConfigForm.businessConfig.length === 0" description="暂无业务配置">
+               <template #description>
+                 <p class="text-gray-500">请点击上方"添加业务类型"按钮选择业务</p>
+                 <p class="text-sm text-orange-500 mt-2">选择后需要为每个业务设置价格（cost）</p>
+               </template>
+             </el-empty>
           </el-form>
     </el-drawer>
 
@@ -400,10 +426,24 @@
         @selection-change="handleBusinessTypeSelection"
         ref="businessTypeTable"
       >
-        <el-table-column type="selection" width="55" />
+        <el-table-column type="selection" width="55" :selectable="checkBusinessSelectable" />
         <el-table-column prop="code" label="业务编码" width="120" />
         <el-table-column prop="name" label="业务名称" />
         <el-table-column prop="description" label="业务描述" />
+        <el-table-column label="当前配置" width="180">
+          <template #default="scope">
+            <div v-if="getExistingBusinessConfig(scope.row)" style="display: flex; flex-direction: column; gap: 4px;">
+              <div>
+                <el-tag type="success" size="small">已配置</el-tag>
+                <el-tag :type="getExistingBusinessConfig(scope.row).status === 1 ? 'success' : 'info'" size="small" style="margin-left: 4px;">
+                  {{ getExistingBusinessConfig(scope.row).status === 1 ? '启用' : '状态' }}
+                </el-tag>
+              </div>
+              <span style="font-size: 12px; color: #606266;">💰 成本: {{ getExistingBusinessConfig(scope.row).cost.toFixed(4) }} 元</span>
+            </div>
+            <el-tag v-else type="info" size="small">未配置</el-tag>
+          </template>
+        </el-table-column>
       </el-table>
       <template #footer>
         <el-button @click="businessTypeSelectorVisible = false">取消</el-button>
@@ -423,7 +463,8 @@ import {
   findSmsCustomers,
   getSmsCustomersList,
   creditDebitSmsCustomers,
-  configureBusinessSmsCustomers
+  configureBusinessSmsCustomers,
+  getBusinessConfigSmsCustomers
 } from '@/plugin/sms/api/smsCustomers'
 
 import { getSmsPlatformBusinessTypesList } from '@/plugin/sms/api/smsPlatformBusinessTypes'
@@ -927,9 +968,31 @@ const selectedBusinessTypes = ref([])
 
 // 打开业务配置对话框
 const openBusinessConfigDialog = async () => {
-  businessConfigForm.value = {
-    businessConfig: []
+  // 加载已有的业务配置
+  try {
+    const res = await getBusinessConfigSmsCustomers({ customerId: detailForm.value.ID })
+    if (res.code === 0 && res.data) {
+      // 映射后端数据到表单结构
+      businessConfigForm.value.businessConfig = res.data.map(config => ({
+        platformBusinessTypeId: config.platformBusinessTypeId,
+        businessCode: config.businessCode || config.code,
+        businessName: config.businessName || config.name,
+        cost: Number(config.cost) || 0,
+        weight: Number(config.weight) || 0,
+        status: Number(config.status) || 1  // 确保是整数类型
+      }))
+    } else {
+      businessConfigForm.value = {
+        businessConfig: []
+      }
+    }
+  } catch (error) {
+    console.error('加载业务配置失败:', error)
+    businessConfigForm.value = {
+      businessConfig: []
+    }
   }
+  
   // 加载平台业务类型列表
   await loadPlatformBusinessTypes()
   businessConfigDialogVisible.value = true
@@ -968,6 +1031,25 @@ const handleBusinessTypeSelection = (selection) => {
   selectedBusinessTypes.value = selection
 }
 
+// 检查业务是否可选择（未添加的才能选）
+const checkBusinessSelectable = (row) => {
+  return !isBusinessAdded(row)
+}
+
+// 检查业务是否已添加
+const isBusinessAdded = (row) => {
+  return businessConfigForm.value.businessConfig.some(
+    item => item.platformBusinessTypeId === row.ID
+  )
+}
+
+// 获取已配置业务的详细信息
+const getExistingBusinessConfig = (row) => {
+  return businessConfigForm.value.businessConfig.find(
+    item => item.platformBusinessTypeId === row.ID
+  )
+}
+
 // 确认业务类型选择
 const confirmBusinessTypeSelection = () => {
   selectedBusinessTypes.value.forEach(type => {
@@ -978,8 +1060,9 @@ const confirmBusinessTypeSelection = () => {
     if (!exists) {
       businessConfigForm.value.businessConfig.push({
         platformBusinessTypeId: type.ID,
-        businessCode: type.code,
-        businessName: type.name,
+        businessCode: type.code || type.Code,
+        businessName: type.name || type.Name,
+        cost: 0.0000,
         weight: 1,
         status: true
       })
@@ -988,11 +1071,6 @@ const confirmBusinessTypeSelection = () => {
   businessTypeSelectorVisible.value = false
   // 清空选择
   businessTypeTable.value?.clearSelection()
-}
-
-// 移除业务配置项
-const removeBusinessConfig = (index) => {
-  businessConfigForm.value.businessConfig.splice(index, 1)
 }
 
 // 提交业务配置
@@ -1006,10 +1084,34 @@ const submitBusinessConfig = async () => {
   }
 
   businessConfigLoading.value = true
+  
+  // 数据清洗：确保所有字段类型正确，过滤掉无效数据
+  const cleanedConfig = businessConfigForm.value.businessConfig
+    .filter(item => item && item.platformBusinessTypeId) // 过滤掉空项和无ID的项
+    .map(item => ({
+      platformBusinessTypeId: Number(item.platformBusinessTypeId),
+      businessCode: String(item.businessCode || ''),
+      businessName: String(item.businessName || ''),
+      cost: Number(item.cost) || 0,
+      weight: Number(item.weight) || 0,
+      status: Number(item.status) === 1 ? 1 : 0  // 确保是 0 或 1
+    }))
+
+  if (cleanedConfig.length === 0) {
+    businessConfigLoading.value = false
+    ElMessage({
+      type: 'warning',
+      message: '没有有效的业务配置数据'
+    })
+    return
+  }
+
   const data = {
     customerId: detailForm.value.ID,
-    businessConfig: businessConfigForm.value.businessConfig
+    businessConfig: cleanedConfig
   }
+
+  console.log('提交业务配置数据:', JSON.stringify(data, null, 2))
 
   const res = await configureBusinessSmsCustomers(data)
   businessConfigLoading.value = false

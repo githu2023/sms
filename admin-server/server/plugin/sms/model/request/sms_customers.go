@@ -8,11 +8,12 @@ import (
 
 // BusinessConfigItem 业务配置项
 type BusinessConfigItem struct {
-	PlatformBusinessTypeID int64  `json:"platformBusinessTypeId" binding:"required"`
-	BusinessCode           string `json:"businessCode" binding:"required"`
-	BusinessName           string `json:"businessName" binding:"required"`
-	Weight                 int32  `json:"weight" binding:"required,min=1"`
-	Status                 *bool  `json:"status"`
+	PlatformBusinessTypeID int64   `json:"platformBusinessTypeId" binding:"required"`
+	BusinessCode           string  `json:"businessCode" binding:"required"`
+	BusinessName           string  `json:"businessName" binding:"required"`
+	Cost                   float64 `json:"cost" binding:"required,min=0"`
+	Weight                 int32   `json:"weight" binding:"min=0"`
+	Status                 int     `json:"status" binding:"required,oneof=0 1"`
 }
 
 type SmsCustomersSearch struct {
