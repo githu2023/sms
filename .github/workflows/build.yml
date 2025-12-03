@@ -301,6 +301,10 @@ jobs:
         working-directory: sms-client
         run: flutter config --enable-windows-desktop
 
+      - name: Create Windows platform files
+        working-directory: sms-client
+        run: flutter create --platforms=windows .
+
       - name: Get Flutter dependencies
         working-directory: sms-client
         run: flutter pub get
