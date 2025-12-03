@@ -57,9 +57,7 @@
     </div>
     <div class="gva-table-box">
         <div class="gva-btn-list">
-            <el-button  type="primary" icon="plus" @click="openDialog()">新增</el-button>
-            <el-button  icon="delete" style="margin-left: 10px;" :disabled="!multipleSelection.length" @click="onDelete">删除</el-button>
-            
+            <!-- 号码记录页面不提供新增和删除功能，由系统自动创建 -->
         </div>
         <el-table
         ref="multipleTable"
@@ -67,9 +65,7 @@
         tooltip-effect="dark"
         :data="tableData"
         row-key="ID"
-        @selection-change="handleSelectionChange"
         >
-        <el-table-column type="selection" width="55" />
         
         <el-table-column sortable align="left" label="创建时间" prop="CreatedAt" width="180">
             <template #default="scope">{{ formatDate(scope.row.CreatedAt) }}</template>
@@ -113,6 +109,10 @@
     <template #default="scope">{{ scope.row.merchantFee ? '¥' + scope.row.merchantFee : '-' }}</template>
 </el-table-column>
 
+            <el-table-column align="left" label="代理费用" prop="agentFee" width="100">
+    <template #default="scope">{{ scope.row.agentFee ? '¥' + scope.row.agentFee : '-' }}</template>
+</el-table-column>
+
             <el-table-column align="left" label="利润" prop="profit" width="100">
     <template #default="scope">
       <span :class="scope.row.profit > 0 ? 'text-green-600' : scope.row.profit < 0 ? 'text-red-600' : ''">
@@ -122,11 +122,19 @@
 </el-table-column>
 
             <el-table-column align="left" label="备注" prop="remark" width="150" show-overflow-tooltip />
-        <el-table-column align="left" label="操作" fixed="right" min-width="240">
+        <el-table-column align="left" label="操作" fixed="right" min-width="300">
             <template #default="scope">
-            <el-button  type="primary" link class="table-button" @click="getDetails(scope.row)"><el-icon style="margin-right: 5px"><InfoFilled /></el-icon>查看</el-button>
-            <el-button  type="primary" link icon="edit" class="table-button" @click="updateSmsPhoneAssignmentsFunc(scope.row)">编辑</el-button>
-            <el-button   type="primary" link icon="delete" @click="deleteRow(scope.row)">删除</el-button>
+            <el-button type="primary" link class="table-button" @click="getDetails(scope.row)"><el-icon style="margin-right: 5px"><InfoFilled /></el-icon>查看</el-button>
+            <el-button 
+              type="success" 
+              link 
+              @click="getVerificationCode(scope.row)"
+              :disabled="scope.row.status === 'completed' || scope.row.status === 'expired'"
+            >
+              📱获取验证码
+            </el-button>
+            <el-button type="warning" link @click="releasePhone(scope.row)">🔓释放</el-button>
+            <el-button type="info" link @click="expirePhone(scope.row)">⏱️过期</el-button>
             </template>
         </el-table-column>
         </el-table>
@@ -189,6 +197,9 @@
              <el-form-item label="商户费用" prop="merchantFee">
     <el-input-number v-model="formData.merchantFee" style="width:100%" :precision="4" :min="0" :clearable="true" />
 </el-form-item>
+             <el-form-item label="代理费用" prop="agentFee">
+    <el-input-number v-model="formData.agentFee" style="width:100%" :precision="4" :min="0" :clearable="true" placeholder="预留字段，暂未启用" />
+</el-form-item>
              <el-form-item label="利润" prop="profit">
     <el-input-number v-model="formData.profit" style="width:100%" :precision="4" :clearable="true" />
 </el-form-item>
@@ -236,6 +247,9 @@
 </el-descriptions-item>
                  <el-descriptions-item label="商户费用">
     {{ detailForm.merchantFee ? '¥' + detailForm.merchantFee : '-' }}
+</el-descriptions-item>
+                 <el-descriptions-item label="代理费用">
+    {{ detailForm.agentFee ? '¥' + detailForm.agentFee : '-' }}
 </el-descriptions-item>
                  <el-descriptions-item label="利润">
     <span :class="detailForm.profit > 0 ? 'text-green-600' : detailForm.profit < 0 ? 'text-red-600' : ''">
@@ -301,6 +315,7 @@ const formData = ref({
             status: 'pending',
             providerCost: undefined,
             merchantFee: undefined,
+            agentFee: undefined,
             profit: undefined,
             remark: '',
         })
@@ -549,6 +564,75 @@ const getDetails = async (row) => {
 const closeDetailShow = () => {
   detailShow.value = false
   detailForm.value = {}
+}
+
+// 获取验证码
+const getVerificationCode = (row) => {
+  ElMessageBox.confirm(
+    `确定要获取手机号 ${row.phoneNumber} 的验证码吗？`,
+    '获取验证码',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'info'
+    }
+  ).then(() => {
+    // TODO: 调用获取验证码的 API
+    ElMessage({
+      type: 'info',
+      message: '获取验证码功能待实现'
+    })
+    // 刷新列表
+    // getTableData()
+  }).catch(() => {
+    // 用户取消
+  })
+}
+
+// 释放号码
+const releasePhone = (row) => {
+  ElMessageBox.confirm(
+    `确定要释放手机号 ${row.phoneNumber} 吗？释放后该号码可被其他用户使用。`,
+    '释放号码',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    // TODO: 调用释放号码的 API
+    ElMessage({
+      type: 'info',
+      message: '释放号码功能待实现'
+    })
+    // 刷新列表
+    // getTableData()
+  }).catch(() => {
+    // 用户取消
+  })
+}
+
+// 设置号码为过期
+const expirePhone = (row) => {
+  ElMessageBox.confirm(
+    `确定要将手机号 ${row.phoneNumber} 设置为过期吗？`,
+    '设置过期',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    // TODO: 调用设置过期的 API
+    ElMessage({
+      type: 'info',
+      message: '设置过期功能待实现'
+    })
+    // 刷新列表
+    // getTableData()
+  }).catch(() => {
+    // 用户取消
+  })
 }
 
 

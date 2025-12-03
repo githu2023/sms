@@ -77,6 +77,14 @@
 
             <el-table-column align="left" label="变动后余额" prop="balanceAfter" width="120" />
 
+            <el-table-column align="left" label="变动前冻结" prop="frozenBefore" width="120">
+        <template #default="scope">{{ scope.row.frozenBefore || 0 }}</template>
+      </el-table-column>
+
+            <el-table-column align="left" label="变动后冻结" prop="frozenAfter" width="120">
+        <template #default="scope">{{ scope.row.frozenAfter || 0 }}</template>
+      </el-table-column>
+
             <el-table-column align="left" label="交易类型" prop="type" width="100">
         <template #default="scope">{{ transactionTypeLabel(scope.row.type) }}</template>
       </el-table-column>
@@ -160,6 +168,12 @@
 </el-descriptions-item>
                  <el-descriptions-item label="变动后余额">
     {{ detailForm.balanceAfter }}
+</el-descriptions-item>
+                 <el-descriptions-item label="变动前冻结金额">
+    {{ detailForm.frozenBefore || 0 }}
+</el-descriptions-item>
+                 <el-descriptions-item label="变动后冻结金额">
+    {{ detailForm.frozenAfter || 0 }}
 </el-descriptions-item>
                  <el-descriptions-item label="交易类型">
           {{ transactionTypeLabel(detailForm.type) }}

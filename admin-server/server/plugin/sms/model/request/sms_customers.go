@@ -39,6 +39,22 @@ type CreateSmsCustomersReq struct {
 	Remark         string   `json:"remark" form:"remark"`
 }
 
+// UpdateSmsCustomersReq 更新商户请求结构体(密码可选)
+type UpdateSmsCustomersReq struct {
+	ID           uint     `json:"ID" form:"ID" binding:"required"`
+	MerchantName string   `json:"merchantName" form:"merchantName" binding:"required"`
+	MerchantNo   string   `json:"merchantNo" form:"merchantNo" binding:"required"`
+	Username     *string  `json:"username" form:"username" binding:"required"`
+	Email        *string  `json:"email" form:"email" binding:"required,email"`
+	Password     *string  `json:"password" form:"password"` // 可选，为空则不修改密码
+	ApiSecretKey *string  `json:"apiSecretKey" form:"apiSecretKey"`
+	Balance      *float64 `json:"balance" form:"balance"`
+	FrozenAmount *float64 `json:"frozenAmount" form:"frozenAmount"`
+	ParentID     *int64   `json:"parentId" form:"parentId"`
+	Status       *bool    `json:"status" form:"status"`
+	Remark       string   `json:"remark" form:"remark"`
+}
+
 // ConfigureBusinessReq 配置商户业务请求
 type ConfigureBusinessReq struct {
 	CustomerID     int64                `json:"customerId" binding:"required"`

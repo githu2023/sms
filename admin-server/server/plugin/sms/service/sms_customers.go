@@ -72,8 +72,27 @@ func (s *smsCustomers) DeleteSmsCustomersByIds(ctx context.Context, IDs []string
 
 // UpdateSmsCustomers 更新商户记录
 // Author [yourname](https://github.com/yourname)
-func (s *smsCustomers) UpdateSmsCustomers(ctx context.Context, smsCustomers model.SmsCustomers) (err error) {
-	err = global.GVA_DB.Model(&model.SmsCustomers{}).Where("id = ?", smsCustomers.ID).Updates(&smsCustomers).Error
+func (s *smsCustomers) UpdateSmsCustomers(ctx context.Context, req *request.UpdateSmsCustomersReq) (err error) {
+	// 准备更新数据
+	updates := map[string]interface{}{
+		"merchant_name":  req.MerchantName,
+		"merchant_no":    req.MerchantNo,
+		"username":       req.Username,
+		"email":          req.Email,
+		"api_secret_key": req.ApiSecretKey,
+		"parent_id":      req.ParentID,
+		"status":         req.Status,
+		"remark":         req.Remark,
+	}
+
+	// 如果提供了密码，则更新密码哈希
+	if req.Password != nil && *req.Password != "" {
+		passwordHash := utils.BcryptHash(*req.Password)
+		updates["password_hash"] = passwordHash
+	}
+
+	// 更新数据库
+	err = global.GVA_DB.Model(&model.SmsCustomers{}).Where("id = ?", req.ID).Updates(updates).Error
 	return err
 }
 
@@ -216,6 +235,8 @@ func (s *smsCustomers) CreditDebitSmsCustomers(ctx context.Context, req *request
 		Amount:        &amount,
 		BalanceBefore: &currentBalance,
 		BalanceAfter:  &newBalance,
+		FrozenBefore:  &currentFrozenAmount,
+		FrozenAfter:   &newFrozenAmount,
 		Type:          &transactionType,
 		Notes:         req.Notes,
 	}

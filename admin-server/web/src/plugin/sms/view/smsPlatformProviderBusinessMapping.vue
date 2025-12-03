@@ -141,16 +141,26 @@
              <el-form-item label="平台业务编码:" prop="platformBusinessCode">
     <el-input v-model="formData.platformBusinessCode" :clearable="true" placeholder="自动填充" :disabled="true" />
 </el-form-item>
-             <el-form-item label="三方业务:" prop="providerBusinessTypeId">
-    <el-select v-model="formData.providerBusinessTypeId" placeholder="请选择三方业务" clearable @change="onProviderBusinessChange">
+             <el-form-item label="三方渠道:" prop="selectedProviderId">
+    <el-select v-model="formData.selectedProviderId" placeholder="请先选择三方渠道" clearable filterable @change="onProviderChange">
       <el-option
-        v-for="item in providerBusinessTypesList"
-        :key="item.ID"
-        :label="`${getProviderName(item.providerId)} - ${item.businessName}`"
-        :value="item.ID">
-        <span>{{ getProviderName(item.providerId) }} - {{ item.businessName }} ({{ item.businessCode }})</span>
+        v-for="provider in providersList"
+        :key="provider.ID"
+        :label="`${provider.name} (${provider.code})`"
+        :value="provider.ID">
       </el-option>
     </el-select>
+</el-form-item>
+             <el-form-item label="三方业务:" prop="providerBusinessTypeId">
+    <el-select v-model="formData.providerBusinessTypeId" placeholder="请先选择三方渠道" clearable :disabled="!formData.selectedProviderId" @change="onProviderBusinessChange">
+      <el-option
+        v-for="item in filteredProviderBusinessTypesList"
+        :key="item.ID"
+        :label="`${item.businessName} (${item.businessCode})`"
+        :value="item.ID">
+      </el-option>
+    </el-select>
+    <div v-if="!formData.selectedProviderId" class="text-xs text-gray-500 mt-1">请先选择三方渠道</div>
 </el-form-item>
              <el-form-item label="三方编码:" prop="providerCode">
     <el-input v-model="formData.providerCode" :clearable="true" placeholder="自动填充" :disabled="true" />
@@ -238,11 +248,13 @@ const showAllQuery = ref(false)
 const platformBusinessTypesList = ref([])
 const providersList = ref([])
 const providerBusinessTypesList = ref([])
+const filteredProviderBusinessTypesList = ref([]) // 过滤后的三方业务列表
 
 // 自动化生成的字典（可能为空）以及字段
 const formData = ref({
             platformBusinessTypeId: undefined,
             platformBusinessCode: '',
+            selectedProviderId: undefined, // 选中的三方渠道ID
             providerBusinessTypeId: undefined,
             providerCode: '',
             businessCode: '',
@@ -283,6 +295,22 @@ const onPlatformBusinessChange = (businessId) => {
   } else {
     formData.value.platformBusinessCode = ''
   }
+}
+
+// 选择三方渠道时过滤业务列表
+const onProviderChange = (providerId) => {
+  if (providerId) {
+    // 过滤出该渠道下的所有业务
+    filteredProviderBusinessTypesList.value = providerBusinessTypesList.value.filter(
+      b => b.providerId === providerId
+    )
+  } else {
+    filteredProviderBusinessTypesList.value = []
+  }
+  // 清空三方业务选择
+  formData.value.providerBusinessTypeId = undefined
+  formData.value.providerCode = ''
+  formData.value.businessCode = ''
 }
 
 // 选择三方业务时自动填充编码
@@ -447,6 +475,19 @@ const updateSmsPlatformProviderBusinessMappingFunc = async(row) => {
     type.value = 'update'
     if (res.code === 0) {
         formData.value = res.data
+        
+        // 根据选中的三方业务ID找到对应的渠道ID
+        const selectedBusiness = providerBusinessTypesList.value.find(
+          b => b.ID === formData.value.providerBusinessTypeId
+        )
+        if (selectedBusiness) {
+          formData.value.selectedProviderId = selectedBusiness.providerId
+          // 过滤该渠道下的业务列表
+          filteredProviderBusinessTypesList.value = providerBusinessTypesList.value.filter(
+            b => b.providerId === selectedBusiness.providerId
+          )
+        }
+        
         dialogFormVisible.value = true
     }
 }
@@ -482,6 +523,7 @@ const closeDialog = () => {
     formData.value = {
         platformBusinessTypeId: undefined,
         platformBusinessCode: '',
+        selectedProviderId: undefined,
         providerBusinessTypeId: undefined,
         providerCode: '',
         businessCode: '',
@@ -489,6 +531,7 @@ const closeDialog = () => {
         status: false,
         remark: '',
         }
+    filteredProviderBusinessTypesList.value = []
 }
 // 弹窗确定
 const enterDialog = async () => {

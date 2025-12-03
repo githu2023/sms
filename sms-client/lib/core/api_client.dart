@@ -11,6 +11,7 @@ import '../models/user.dart';
 import '../models/verification_code_entry.dart';
 import '../models/verification_code_result.dart';
 import '../models/whitelist.dart';
+import '../models/transaction.dart';
 
 class ApiClient {
   // 根据环境自动选择 baseUrl
@@ -86,7 +87,28 @@ class ApiClient {
       final jsonData = json.decode(utf8.decode(response.bodyBytes));
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return ApiResponse.fromJson(jsonData, fromJson);
+        // 检查是否是标准格式（有 code 字段）
+        if (jsonData is Map<String, dynamic> && jsonData.containsKey('code')) {
+          return ApiResponse.fromJson(jsonData, fromJson);
+        } else {
+          // 直接返回数据格式（如 transactions、whitelist 接口）
+          // 将整个响应作为 data 处理
+          if (fromJson != null) {
+            return ApiResponse<T>(
+              success: true,
+              message: 'Success',
+              data: fromJson(jsonData),
+              code: 200,
+            );
+          } else {
+            return ApiResponse<T>(
+              success: true,
+              message: 'Success',
+              data: jsonData as T?,
+              code: 200,
+            );
+          }
+        }
       } else {
         return ApiResponse.error(
           message: jsonData['message'] ?? jsonData['msg'] ?? 'Request failed',
@@ -457,6 +479,58 @@ class ApiClient {
       '/client/v1/whitelist',
       data: {'ip_address': ipAddress},
       needsAuth: true,
+    );
+  }
+
+  // Transaction APIs
+  Future<ApiResponse<TransactionListResponse>> getTransactions({
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    return await get(
+      '/client/v1/transactions',
+      queryParams: {
+        'limit': limit.toString(),
+        'offset': offset.toString(),
+      },
+      fromJson: (data) =>
+          TransactionListResponse.fromJson(data as Map<String, dynamic>),
+    );
+  }
+
+  Future<ApiResponse<TransactionListResponse>> getTransactionsByType({
+    required int type, // 1=充值，2=消费
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    return await get(
+      '/client/v1/transactions/by-type',
+      queryParams: {
+        'type': type.toString(),
+        'limit': limit.toString(),
+        'offset': offset.toString(),
+      },
+      fromJson: (data) =>
+          TransactionListResponse.fromJson(data as Map<String, dynamic>),
+    );
+  }
+
+  Future<ApiResponse<TransactionListResponse>> getTransactionsByDate({
+    required String startDate, // 格式：2006-01-02
+    required String endDate, // 格式：2006-01-02
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    return await get(
+      '/client/v1/transactions/by-date',
+      queryParams: {
+        'start_date': startDate,
+        'end_date': endDate,
+        'limit': limit.toString(),
+        'offset': offset.toString(),
+      },
+      fromJson: (data) =>
+          TransactionListResponse.fromJson(data as Map<String, dynamic>),
     );
   }
 }

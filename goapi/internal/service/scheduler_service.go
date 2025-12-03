@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sms-platform/goapi/internal/config"
 	"sms-platform/goapi/internal/domain"
@@ -191,20 +190,17 @@ func (s *SchedulerService) markAssignmentAsExpired(ctx context.Context, assignme
 		return
 	}
 
-	// 如果已扣费，需要释放冻结金额
+	// 如果已扣费，需要退款到余额
+	// 注意：使用 ReserveAndCommitWithSingleRecord 后，冻结金额已经转为实扣（冻结金额=0）
+	// 所以过期时应该使用 Refund (Type 3: 拉号回退) 退款到余额
 	if assignment.CustomerID != nil && assignment.MerchantFee != nil && *assignment.MerchantFee > 0 {
 		customerID := *assignment.CustomerID
 		refundAmount := *assignment.MerchantFee
 		notes := fmt.Sprintf("手机号过期退款: %s (分配ID: %d)",
 			getPhoneNumber(assignment.PhoneNumber), assignment.ID)
 
-		if _, err := s.transactionSvc.ReleaseReservedFunds(ctx, customerID, refundAmount, assignment.ID, notes); err != nil {
-			if errors.Is(err, ErrInsufficientFrozen) {
-				zap.S().Warnf("No frozen funds to release for assignment %d (customer %d): %v",
-					assignment.ID, customerID, err)
-			} else {
-				zap.S().Errorf("Error releasing frozen funds for assignment %d: %v", assignment.ID, err)
-			}
+		if _, err := s.transactionSvc.Refund(ctx, customerID, refundAmount, assignment.ID, notes); err != nil {
+			zap.S().Errorf("Error refunding for expired assignment %d: %v", assignment.ID, err)
 		} else {
 			zap.S().Infof("Assignment %d marked as expired and refunded %.2f to customer %d",
 				assignment.ID, refundAmount, customerID)

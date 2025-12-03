@@ -84,6 +84,7 @@ func NewRouter(cfg config.Config) *gin.Engine { // Pass config to router
 	phoneHandler := handler.NewPhoneHandler(phoneService)
 	assignmentHandler := handler.NewAssignmentHandler(assignmentService)
 	whitelistHandler := handler.NewWhitelistHandler(whitelistService)
+	transactionHandler := handler.NewTransactionHandler(transactionService)
 
 	// --- API Groups ---
 
@@ -111,6 +112,10 @@ func NewRouter(cfg config.Config) *gin.Engine { // Pass config to router
 			clientAuth.GET("/whitelist", whitelistHandler.ListWhitelists)
 			clientAuth.POST("/whitelist", whitelistHandler.AddWhitelist)
 			clientAuth.DELETE("/whitelist", whitelistHandler.DeleteWhitelist)
+			// 交易记录相关接口
+			clientAuth.GET("/transactions", transactionHandler.GetTransactionHistory)
+			clientAuth.GET("/transactions/by-type", transactionHandler.GetTransactionsByType)
+			clientAuth.GET("/transactions/by-date", transactionHandler.GetTransactionsByDateRange)
 		}
 	}
 
@@ -135,6 +140,10 @@ func NewRouter(cfg config.Config) *gin.Engine { // Pass config to router
 			apiAuth.GET("/whitelist", whitelistHandler.ListWhitelists)
 			apiAuth.POST("/whitelist", whitelistHandler.AddWhitelist)
 			apiAuth.DELETE("/whitelist", whitelistHandler.DeleteWhitelist)
+			// 交易记录相关接口
+			apiAuth.GET("/transactions", transactionHandler.GetTransactionHistory)
+			apiAuth.GET("/transactions/by-type", transactionHandler.GetTransactionsByType)
+			apiAuth.GET("/transactions/by-date", transactionHandler.GetTransactionsByDateRange)
 		}
 	}
 

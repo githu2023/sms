@@ -117,7 +117,8 @@
     <el-input v-model="formData.name" :clearable="true" placeholder="请输入三方名称" />
 </el-form-item>
              <el-form-item label="三方编码" prop="code">
-    <el-input v-model="formData.code" :clearable="true" placeholder="请输入三方编码" />
+    <el-input v-model="formData.code" :clearable="true" placeholder="请输入三方编码" :disabled="type === 'update'" />
+    <div v-if="type === 'update'" class="text-xs text-gray-500 mt-1">三方编码不可修改</div>
 </el-form-item>
              <el-form-item label="API网关" prop="apiGateway">
     <el-input v-model="formData.apiGateway" type="textarea" rows="3" placeholder="请输入API网关地址" />
@@ -126,7 +127,7 @@
     <el-input v-model="formData.merchantId" :clearable="true" placeholder="请输入三方商户号" />
 </el-form-item>
              <el-form-item label="商户Key" prop="merchantKey">
-    <el-input v-model="formData.merchantKey" type="password" show-password :clearable="true" placeholder="请输入三方商户key" />
+    <el-input v-model="formData.merchantKey" :clearable="true" placeholder="请输入三方商户key" />
 </el-form-item>
              <el-form-item label="启用状态" prop="status">
     <el-switch v-model="formData.status" active-color="#13ce66" inactive-color="#ff4949" active-text="启用" inactive-text="停用" />

@@ -13,12 +13,40 @@ class GetCodePage extends StatefulWidget {
   State<GetCodePage> createState() => _GetCodePageState();
 }
 
-class _GetCodePageState extends State<GetCodePage> {
+class _GetCodePageState extends State<GetCodePage> with RouteAware {
   final ApiClient _apiClient = ApiClient();
   final TextEditingController _phonesController = TextEditingController();
   VerificationCodeResult? _result;
   String? _error;
   bool _isLoading = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 检查验证码是否过期
+    _checkExpired();
+  }
+
+  void _checkExpired() {
+    if (_result != null && _result!.codes.isNotEmpty) {
+      bool hasExpired = false;
+      
+      for (var entry in _result!.codes) {
+        // 如果状态是 failed，说明已过期或失败，需要刷新状态
+        if (entry.status == 'failed') {
+          hasExpired = true;
+          break;
+        }
+      }
+      
+      if (hasExpired) {
+        // 清除过期结果，避免再次请求
+        setState(() {
+          _result = null;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -37,9 +65,18 @@ class _GetCodePageState extends State<GetCodePage> {
       return;
     }
 
+    // 如果之前的结果中有过期状态，先清除
+    if (_result != null) {
+      bool hasExpired = _result!.codes.any((entry) => entry.status == 'failed');
+      if (hasExpired) {
+        setState(() {
+          _result = null;
+        });
+      }
+    }
+
     setState(() {
       _isLoading = true;
-      _result = null;
       _error = null;
     });
 

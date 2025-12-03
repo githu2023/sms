@@ -17,6 +17,7 @@ type SmsPhoneAssignments struct {
 	Status           *string  `json:"status" form:"status" gorm:"comment:状态 (pending:待取码, completed:已完成, expired:已过期, failed:失败);column:status;size:20;default:pending;"` //状态
 	ProviderCost     *float64 `json:"providerCost" form:"providerCost" gorm:"comment:渠道成本;column:provider_cost;type:decimal(10,4);"`                                      //渠道成本
 	MerchantFee      *float64 `json:"merchantFee" form:"merchantFee" gorm:"comment:商户费用;column:merchant_fee;type:decimal(10,4);"`                                         //商户费用
+	AgentFee         *float64 `json:"agentFee" form:"agentFee" gorm:"comment:代理费用;column:agent_fee;type:decimal(10,4);"`                                                  //代理费用
 	Profit           *float64 `json:"profit" form:"profit" gorm:"comment:利润;column:profit;type:decimal(10,4);"`                                                           //利润
 	Remark           *string  `json:"remark" form:"remark" gorm:"comment:备注;column:remark;size:500;"`                                                                     //备注
 

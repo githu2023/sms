@@ -8,13 +8,13 @@ import (
 // SmsProviders 三方渠道管理（上游服务商）结构体
 type SmsProviders struct {
 	global.GVA_MODEL
-	Name        *string         `json:"name" form:"name" gorm:"comment:三方名称;column:name;size:255;"`                           // 三方名称
-	Code        *string         `json:"code" form:"code" gorm:"comment:三方编码;column:code;size:50;"`                            // 三方编码
-	ApiGateway  *string         `json:"apiGateway" form:"apiGateway" gorm:"comment:三方API网关地址;column:api_gateway;type:text;"`  // 三方API网关地址
-	MerchantId  *string         `json:"merchantId" form:"merchantId" gorm:"comment:三方商户号;column:merchant_id;size:255;"`       // 三方商户号
-	MerchantKey *string         `json:"merchantKey" form:"merchantKey" gorm:"comment:三方商户key;column:merchant_key;type:text;"` // 三方商户key
-	Status      *bool           `json:"status" form:"status" gorm:"comment:启用状态;column:status;"`                              // 启用状态
-	Remark      *string         `json:"remark" form:"remark" gorm:"comment:备注;column:remark;size:500;"`                       // 备注
+	Name        *string         `json:"name" form:"name" gorm:"comment:三方名称;column:name;size:255;"`                                                         // 三方名称
+	Code        *string         `json:"code" form:"code" gorm:"comment:三方编码;column:code;size:50;uniqueIndex;"`                                              // 三方编码（唯一）
+	ApiGateway  *string         `json:"apiGateway" form:"apiGateway" gorm:"comment:三方API网关地址;column:api_gateway;type:text;"`                                // 三方API网关地址
+	MerchantId  *string         `json:"merchantId" form:"merchantId" gorm:"comment:三方商户号;column:merchant_id;size:255;"`                                     // 三方商户号
+	MerchantKey *string         `json:"merchantKey" form:"merchantKey" gorm:"comment:三方商户key;column:merchant_key;type:text;"`                               // 三方商户key
+	Status      *bool           `json:"status" form:"status" gorm:"comment:启用状态;column:status;"`                                                            // 启用状态
+	Remark      *string         `json:"remark" form:"remark" gorm:"comment:备注;column:remark;size:500;"`                                                     // 备注
 	ExtraConfig *common.JSONMap `json:"extraConfig" form:"extraConfig" gorm:"comment:运营商额外配置(JSON格式，用于存储特殊配置如projectName等);column:extra_config;type:json;"` // 运营商额外配置
 }
 

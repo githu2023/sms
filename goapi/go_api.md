@@ -56,6 +56,25 @@
 | `token` | string | 生成的访问令牌。 |
 | `expires_in`| integer | 令牌的有效时长（秒）。 |
 
+**示例请求:**
+```json
+{
+  "secret": "sk_live_1234567890abcdef"
+}
+```
+
+**示例响应:**
+```json
+{
+  "code": 200,
+  "msg": "Success",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expires_in": 3600
+  }
+}
+```
+
 ### 2.2. `POST /api/v1/get_phone`
 **描述:** 为指定的业务类型批量获取手机号码（支持1-10个）。
 **请求头:** `Authorization: Bearer <token>`
@@ -198,6 +217,19 @@
 | `frozen_amount` | number | 当前冻结金额，正在等待结算或释放的额度。 |
 | `currency` | string | 货币代码（目前固定为 `USD`）。 |
 
+**示例响应:**
+```json
+{
+  "code": 200,
+  "msg": "Success",
+  "data": {
+    "balance": 9996.99,
+    "frozen_amount": 15.50,
+    "currency": "USD"
+  }
+}
+```
+
 ### 2.7. `GET /api/v1/business_types`
 **描述:** 获取平台支持的所有业务类型列表。
 **请求头:** `Authorization: Bearer <token>`
@@ -209,6 +241,34 @@
 | `business_code` | string | 业务的唯一代码，如 `wx`。 |
 | `business_name` | string | 业务名称。 |
 | `weight` | integer | 权重，用于多渠道路由。 |
+
+**示例响应:**
+```json
+{
+  "code": 200,
+  "msg": "Success",
+  "data": [
+    {
+      "id": 1,
+      "business_code": "wx",
+      "business_name": "微信",
+      "weight": 100
+    },
+    {
+      "id": 2,
+      "business_code": "qq",
+      "business_name": "QQ",
+      "weight": 90
+    },
+    {
+      "id": 3,
+      "business_code": "taobao",
+      "business_name": "淘宝",
+      "weight": 85
+    }
+  ]
+}
+```
 
 ### 2.8. `GET /api/v1/phone_status`
 **描述:** 查询指定手机号的当前状态和有效期。
@@ -226,6 +286,20 @@
 | `status` | string | 当前状态（示例：`active`）。 |
 | `valid_until` | string | 有效期至 (ISO 8601格式时间戳)。 |
 | `customer_id` | integer | 客户ID。 |
+
+**示例响应:**
+```json
+{
+  "code": 200,
+  "msg": "Success",
+  "data": {
+    "phone_number": "+8612345678901",
+    "status": "active",
+    "valid_until": "2025-12-03T15:30:00Z",
+    "customer_id": 123
+  }
+}
+```
 
 ### 2.9. IP白名单 (`/api/v1/whitelist`)
 **描述:** 管理用于API密钥访问的IP白名单。
@@ -314,6 +388,24 @@
 | `registration_ip`| string | 注册时使用的IP。 |
 | `last_login_at`| string | 上次登录的ISO 8601格式时间戳。 |
 
+**示例响应:**
+```json
+{
+  "code": 200,
+  "msg": "Success",
+  "data": {
+    "user_id": 123,
+    "username": "test_user",
+    "email": "user@example.com",
+    "balance": 9996.99,
+    "frozen_amount": 15.50,
+    "api_secret_key": "sk_live_1234567890abcdef",
+    "registration_ip": "192.168.1.100",
+    "last_login_at": "2025-12-03T10:30:00Z"
+  }
+}
+```
+
 #### `GET /client/v1/balance`
 **描述:** 查询当前账户余额。
 **成功响应 (`data` 对象):**
@@ -323,6 +415,19 @@
 | `frozen_amount` | number | 当前冻结金额，待结算或待释放的金额。 |
 | `currency` | string | 货币代码，当前固定为 `USD`。 |
 
+**示例响应:**
+```json
+{
+  "code": 200,
+  "msg": "Success",
+  "data": {
+    "balance": 9996.99,
+    "frozen_amount": 15.50,
+    "currency": "USD"
+  }
+}
+```
+
 #### `GET /client/v1/business_types`
 **描述:** 返回当前客户可用的业务类型列表。
 **成功响应 (`data` 数组):**
@@ -330,8 +435,30 @@
 | :--- | :--- | :--- |
 | `id` | integer | 业务配置ID。 |
 | `business_code` | string | 业务编码，如 `wx`、`qq`。 |
-| `business_name` | string | 业务名称，如 “微信”。 |
+| `business_name` | string | 业务名称，如 "微信"。 |
 | `weight` | integer | 权重，用于多渠道路由。 |
+
+**示例响应:**
+```json
+{
+  "code": 200,
+  "msg": "Success",
+  "data": [
+    {
+      "id": 1,
+      "business_code": "wx",
+      "business_name": "微信",
+      "weight": 100
+    },
+    {
+      "id": 2,
+      "business_code": "qq",
+      "business_name": "QQ",
+      "weight": 90
+    }
+  ]
+}
+```
 
 #### `GET /client/v1/assignments`
 **描述:** 分页获取用户的手机号分配历史记录。
@@ -402,9 +529,13 @@
 #### 其他接口
 `/client/v1/`下的下列接口与其在`/api/v1/`中的对应接口功能相同，但使用JWT认证并代表当前登录用户进行操作：
 - `GET /client/v1/assignments/recent`
+- `GET /client/v1/assignments/statistics` - 统计消费金额（按日/周/月）
 - `GET /client/v1/whitelist`
 - `POST /client/v1/whitelist`
 - `DELETE /client/v1/whitelist`（使用请求体传递`ip_address`）
+- `GET /client/v1/transactions` - 查询交易记录
+- `GET /client/v1/transactions/by-type` - 按类型查询交易记录
+- `GET /client/v1/transactions/by-date` - 按日期范围查询交易记录
 
 #### `GET /client/v1/assignments/recent`
 **描述:** 获取最近的手机号获取记录（默认最新5条，可自定义1-50之间）。
@@ -462,6 +593,192 @@
 #### `DELETE /client/v1/whitelist`
 **请求体:** `{ "ip_address": "1.2.3.4" }`
 **成功响应:** `{"message":"删除成功"}`。
+
+#### `GET /client/v1/assignments/statistics`
+**描述:** 获取用户的消费统计数据（按日/周/月聚合）。
+**请求头:** `Authorization: Bearer <jwt>`
+
+**查询参数:**
+| 字段 | 类型 | 必需 | 描述 |
+| :--- | :--- | :--- | :--- |
+| `period` | string | 否 | 统计周期：`daily`（默认）、`weekly`、`monthly`。 |
+| `days` | integer | 否 | 查询最近N天的数据，默认7天。 |
+
+**成功响应 (`data` 对象):**
+```json
+{
+  "period": "daily",
+  "statistics": [
+    {
+      "date": "2025-12-01",
+      "total_cost": 15.50,
+      "count": 25
+    },
+    {
+      "date": "2025-12-02",
+      "total_cost": 8.20,
+      "count": 10
+    }
+  ],
+  "total_cost": 23.70,
+  "total_count": 35
+}
+```
+
+#### `GET /client/v1/transactions`
+**描述:** 分页获取用户的交易历史记录。
+**请求头:** `Authorization: Bearer <jwt>`
+
+**查询参数:**
+| 字段 | 类型 | 默认值 | 描述 |
+| :--- | :--- | :--- | :--- |
+| `limit` | integer | 20 | 每页数量（1-100）。 |
+| `offset` | integer | 0 | 偏移量。 |
+
+**成功响应 (`data` 对象):**
+```json
+{
+  "total": 100,
+  "limit": 20,
+  "offset": 0,
+  "transactions": [
+    {
+      "id": 123,
+      "amount": 100.50,
+      "balance_before": 500.00,
+      "balance_after": 600.50,
+      "frozen_before": 0.00,
+      "frozen_after": 0.00,
+      "type": "1",
+      "reference_id": null,
+      "notes": "用户充值",
+      "created_at": "2025-12-01T10:30:00Z"
+    }
+  ]
+}
+```
+
+| 字段 | 类型 | 描述 |
+| :--- | :--- | :--- |
+| `total` | integer | 总记录数。 |
+| `limit` | integer | 每页数量。 |
+| `offset` | integer | 当前偏移量。 |
+| `transactions` | array | 交易记录列表。 |
+| `transactions[].id` | integer | 交易记录ID。 |
+| `transactions[].amount` | number | 变动金额（正数为增加，负数为减少）。 |
+| `transactions[].balance_before` | number | 变动前余额。 |
+| `transactions[].balance_after` | number | 变动后余额。 |
+| `transactions[].frozen_before` | number | 变动前冻结金额。 |
+| `transactions[].frozen_after` | number | 变动后冻结金额。 |
+| `transactions[].type` | string | 交易类型（见第4节"资金交易类型"）。 |
+| `transactions[].reference_id` | integer | 关联的业务ID（如订单ID）。 |
+| `transactions[].notes` | string | 备注信息。 |
+| `transactions[].created_at` | string | 创建时间 (ISO 8601)。 |
+
+#### `GET /client/v1/transactions/by-type`
+**描述:** 按交易类型筛选交易记录。
+**请求头:** `Authorization: Bearer <jwt>`
+
+**查询参数:**
+| 字段 | 类型 | 必需 | 描述 |
+| :--- | :--- | :--- | :--- |
+| `type` | integer | 是 | 交易类型：1=充值，2=消费。 |
+| `limit` | integer | 否 | 每页数量（默认20）。 |
+| `offset` | integer | 否 | 偏移量（默认0）。 |
+
+**示例请求:**
+```
+GET /client/v1/transactions/by-type?type=2&limit=10&offset=0
+```
+
+**成功响应:** 格式与 `GET /client/v1/transactions` 相同。
+
+**示例响应:**
+```json
+{
+  "code": 200,
+  "msg": "Success",
+  "data": {
+    "total": 50,
+    "limit": 10,
+    "offset": 0,
+    "transactions": [
+      {
+        "id": 456,
+        "amount": -5.50,
+        "balance_before": 1000.00,
+        "balance_after": 994.50,
+        "frozen_before": 0.00,
+        "frozen_after": 0.00,
+        "type": "2",
+        "reference_id": 789,
+        "notes": "获取手机号 - 微信",
+        "created_at": "2025-12-03T14:20:00Z"
+      }
+    ]
+  }
+}
+```
+
+#### `GET /client/v1/transactions/by-date`
+**描述:** 按日期范围查询交易记录。
+**请求头:** `Authorization: Bearer <jwt>`
+
+**查询参数:**
+| 字段 | 类型 | 必需 | 描述 |
+| :--- | :--- | :--- | :--- |
+| `start_date` | string | 是 | 开始日期（格式：`2006-01-02`）。 |
+| `end_date` | string | 是 | 结束日期（格式：`2006-01-02`）。 |
+| `limit` | integer | 否 | 每页数量（默认20）。 |
+| `offset` | integer | 否 | 偏移量（默认0）。 |
+
+**示例请求:**
+```
+GET /client/v1/transactions/by-date?start_date=2025-12-01&end_date=2025-12-03&limit=20&offset=0
+```
+
+**成功响应:** 格式与 `GET /client/v1/transactions` 相同。
+
+**示例响应:**
+```json
+{
+  "code": 200,
+  "msg": "Success",
+  "data": {
+    "total": 25,
+    "limit": 20,
+    "offset": 0,
+    "transactions": [
+      {
+        "id": 789,
+        "amount": 100.00,
+        "balance_before": 900.00,
+        "balance_after": 1000.00,
+        "frozen_before": 0.00,
+        "frozen_after": 0.00,
+        "type": "1",
+        "reference_id": null,
+        "notes": "账户充值",
+        "created_at": "2025-12-02T09:15:00Z"
+      },
+      {
+        "id": 790,
+        "amount": -5.50,
+        "balance_before": 1000.00,
+        "balance_after": 994.50,
+        "frozen_before": 0.00,
+        "frozen_after": 0.00,
+        "type": "2",
+        "reference_id": 456,
+        "notes": "获取手机号 - QQ",
+        "created_at": "2025-12-02T10:30:00Z"
+      }
+    ]
+  }
+}
+```
+
+> **说明：** `/api/v1/transactions`、`/api/v1/transactions/by-type`、`/api/v1/transactions/by-date` 同样可用，只是使用API Token认证。
 
 ### 3.3. 客户端典型流程（推荐）
 

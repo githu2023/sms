@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"sms-platform/goapi/internal/common"
@@ -226,30 +225,14 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 	currentBalance := balance
 
 	for i := 0; i < count; i++ {
-		reserveNotes := fmt.Sprintf("预冻结手机号: 业务=%s, card=%s, attempt=%d/%d",
-			customerConfig.BusinessName, cardType, i+1, count)
-
-		reserveTx, err := s.transactionService.ReserveFunds(ctx, customerID, merchantFeePerPhone, 0, reserveNotes)
-		if err != nil {
-			if errors.Is(err, ErrInsufficientBalance) {
-				s.apiLogger.LogInsufficientBalance(ctx, customerID, "/api/phone/get_phone",
-					fmt.Sprintf("Insufficient balance during reservation (attempt %d/%d)", i+1, count))
-				if successCount == 0 {
-					return nil, common.CodeInsufficientBalance
-				}
-				break
-			}
-
-			s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
-				fmt.Sprintf("Reserve funds error: %v", err))
+		// 先检查余额是否足够
+		if currentBalance < merchantFeePerPhone {
+			s.apiLogger.LogInsufficientBalance(ctx, customerID, "/api/phone/get_phone",
+				fmt.Sprintf("Insufficient balance (attempt %d/%d): %.2f < %.2f", i+1, count, currentBalance, merchantFeePerPhone))
 			if successCount == 0 {
-				return nil, common.CodeInternalError
+				return nil, common.CodeInsufficientBalance
 			}
 			break
-		}
-
-		if reserveTx != nil && reserveTx.BalanceAfter != nil {
-			currentBalance = float64(*reserveTx.BalanceAfter)
 		}
 
 		// 调用运营商接口获取手机号
@@ -280,17 +263,7 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 				zap.String("error_type", fmt.Sprintf("%T", err)),
 				zap.Error(err))
 			s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone", errorMsg)
-
-			releaseNotes := fmt.Sprintf("释放预冻结（服务商失败）: provider=%s, error=%v",
-				*selectedMapping.ProviderCode, err)
-			releaseTx, releaseErr := s.transactionService.ReleaseReservedFunds(ctx, customerID, merchantFeePerPhone, 0, releaseNotes)
-			if releaseErr != nil {
-				global.LogError("释放预冻结失败",
-					zap.Int64("customer_id", customerID),
-					zap.Error(releaseErr))
-			} else if releaseTx != nil && releaseTx.BalanceAfter != nil {
-				currentBalance = float64(*releaseTx.BalanceAfter)
-			}
+			// 获取失败，不需要释放冻结，因为还没冻结
 			continue
 		}
 
@@ -357,33 +330,65 @@ func (s *PhoneService) GetPhone(ctx context.Context, customerID int64, businessT
 		}
 
 		if err := s.assignmentRepo.Create(ctx, nil, assignment); err != nil {
-			s.transactionService.ReleaseReservedFunds(ctx, customerID, merchantFeePerPhone, 0,
-				fmt.Sprintf("释放预冻结（保存号码失败）: %v", err))
 			s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
 				fmt.Sprintf("Assignment creation error: %v", err))
 			return nil, common.CodeInternalError
 		}
 
-		if reserveTx != nil {
-			s.attachTransactionReference(ctx, reserveTx, assignment.ID)
-		}
-
-		commitNotes := fmt.Sprintf("冻结转消费: assignment_id=%d", assignment.ID)
-		if _, err := s.transactionService.CommitReservedFunds(ctx, customerID, merchantFeePerPhone, assignment.ID, commitNotes); err != nil {
-			global.LogError("冻结转实扣失败",
+		// 原子操作：预冻结 + 冻结转实扣，但只创建一条交易记录（预冻结）
+		// 这样保留了冻结金额的安全机制，但简化了交易记录
+		notes := fmt.Sprintf("获取手机号: 业务=%s, assignment_id=%d", customerConfig.BusinessName, assignment.ID)
+		transaction, err := s.transactionService.ReserveAndCommitWithSingleRecord(ctx, customerID, merchantFeePerPhone, assignment.ID, notes)
+		if err != nil {
+			global.LogError("预冻结+扣款失败",
 				zap.Int64("customer_id", customerID),
 				zap.Int64("assignment_id", assignment.ID),
 				zap.Error(err))
-			s.transactionService.ReleaseReservedFunds(ctx, customerID, merchantFeePerPhone, assignment.ID,
-				fmt.Sprintf("释放预冻结（转消费失败）: %v", err))
+
+			// 标记assignment为失败
 			failStatus := "failed"
 			assignment.Status = &failStatus
 			assignment.UpdatedAt = time.Now()
 			_ = s.assignmentRepo.Update(ctx, nil, assignment)
+
 			s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
-				fmt.Sprintf("Commit frozen funds error: %v", err))
+				fmt.Sprintf("Reserve and commit funds error: %v", err))
 			return nil, common.CodeInternalError
 		}
+
+		// 更新余额
+		if transaction != nil && transaction.BalanceAfter != nil {
+			currentBalance = float64(*transaction.BalanceAfter)
+		}
+
+		/*
+			// 原子操作：预冻结 + 冻结转实扣（已注释，后期优化时使用）
+			reserveNotes := fmt.Sprintf("预冻结手机号: 业务=%s, assignment_id=%d", customerConfig.BusinessName, assignment.ID)
+			commitNotes := fmt.Sprintf("冻结转消费: assignment_id=%d", assignment.ID)
+
+			transactions, err := s.transactionService.ReserveAndCommitFunds(ctx, customerID, merchantFeePerPhone, assignment.ID, reserveNotes, commitNotes)
+			if err != nil {
+				global.LogError("预冻结+扣款失败",
+					zap.Int64("customer_id", customerID),
+					zap.Int64("assignment_id", assignment.ID),
+					zap.Error(err))
+
+				// 标记assignment为失败
+				failStatus := "failed"
+				assignment.Status = &failStatus
+				assignment.UpdatedAt = time.Now()
+				_ = s.assignmentRepo.Update(ctx, nil, assignment)
+
+				s.apiLogger.LogInternalError(ctx, customerID, "/api/phone/get_phone",
+					fmt.Sprintf("Reserve and commit funds error: %v", err))
+				return nil, common.CodeInternalError
+			}
+
+			// 更新余额（从commit交易记录中获取）
+			if len(transactions) >= 2 && transactions[1].BalanceAfter != nil {
+				currentBalance = float64(*transactions[1].BalanceAfter)
+			}
+		*/
 
 		// 添加到结果
 		// 注意：返回给客户端的 Cost 应该是商户费用（MerchantFee），而不是运营商成本

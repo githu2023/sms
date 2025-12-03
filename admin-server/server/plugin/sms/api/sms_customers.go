@@ -99,20 +99,20 @@ func (a *smsCustomers) DeleteSmsCustomersByIds(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Accept application/json
 // @Produce application/json
-// @Param data body model.SmsCustomers true "更新商户"
+// @Param data body request.UpdateSmsCustomersReq true "更新商户"
 // @Success 200 {object} response.Response{msg=string} "更新成功"
 // @Router /smsCustomers/updateSmsCustomers [put]
 func (a *smsCustomers) UpdateSmsCustomers(c *gin.Context) {
 	// 创建业务用Context
 	ctx := c.Request.Context()
 
-	var info model.SmsCustomers
-	err := c.ShouldBindJSON(&info)
+	var req request.UpdateSmsCustomersReq
+	err := c.ShouldBindJSON(&req)
 	if err != nil {
 		response.FailWithMessage(err.Error(), c)
 		return
 	}
-	err = serviceSmsCustomers.UpdateSmsCustomers(ctx, info)
+	err = serviceSmsCustomers.UpdateSmsCustomers(ctx, &req)
 	if err != nil {
 		global.GVA_LOG.Error("更新失败!", zap.Error(err))
 		response.FailWithMessage("更新失败:"+err.Error(), c)

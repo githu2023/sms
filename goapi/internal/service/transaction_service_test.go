@@ -342,7 +342,7 @@ func TestTransactionService_CommitReservedFunds_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, transaction)
 	assert.Equal(t, domain.TransactionTypeFreezeToCharge, *transaction.Type)
-	assert.Equal(t, float32(0), *transaction.Amount)
+	assert.Equal(t, float32(-amount), *transaction.Amount) // 修正：应该是负的金额，表示扣款
 	assert.Equal(t, float32(snapshot.FrozenAfter), *transaction.FrozenAfter)
 
 	mockRepo.AssertExpectations(t)

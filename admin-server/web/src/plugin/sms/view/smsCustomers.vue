@@ -99,6 +99,13 @@
     <template #default="scope">{{ scope.row.frozenAmount || 0 }}</template>
 </el-table-column>
 
+            <el-table-column align="left" label="上级商户" prop="parentId" width="120">
+    <template #default="scope">
+      <span v-if="scope.row.parentId">ID: {{ scope.row.parentId }}</span>
+      <span v-else class="text-gray-400">无</span>
+    </template>
+</el-table-column>
+
             <el-table-column align="left" label="状态" prop="status" width="80">
     <template #default="scope">{{ formatBoolean(scope.row.status) }}</template>
 </el-table-column>
@@ -147,33 +154,64 @@
     <el-input v-model="formData.merchantName" :clearable="true" placeholder="请输入商户名称" />
 </el-form-item>
              <el-form-item label="商户编号" prop="merchantNo">
-    <el-input v-model="formData.merchantNo" :clearable="true" placeholder="请输入商户编号" />
+    <el-input v-model="formData.merchantNo" :clearable="true" placeholder="请输入商户编号" :disabled="type === 'update'" />
+    <div v-if="type === 'update'" class="text-xs text-gray-500 mt-1">商户编号不可修改</div>
 </el-form-item>
              <el-form-item label="用户名" prop="username">
-    <el-input v-model="formData.username" :clearable="true" placeholder="请输入登录用户名" />
+    <el-input v-model="formData.username" :clearable="true" placeholder="请输入登录用户名" :disabled="type === 'update'" />
+    <div v-if="type === 'update'" class="text-xs text-gray-500 mt-1">用户名不可修改</div>
 </el-form-item>
              <el-form-item label="邮箱" prop="email">
     <el-input v-model="formData.email" :clearable="true" placeholder="请输入登录邮箱" />
 </el-form-item>
-             <el-form-item label="登录密码:" prop="password" v-if="type === 'create'">
+             <el-form-item label="登录密码" :prop="type === 'create' ? 'password' : ''">
     <div class="flex gap-2">
       <el-input 
         v-model="formData.password" 
         :clearable="true" 
-        placeholder="请输入登录密码" 
-        :type="showPassword ? 'text' : 'password'"
+        :placeholder="type === 'update' ? '不修改请留空' : '请输入登录密码'" 
+        type="password"
         class="flex-1"
+        show-password
       />
-      <el-button @click="showPassword = !showPassword" :icon="showPassword ? 'View' : 'Hide'" />
       <el-button type="primary" @click="generatePassword">生成密码</el-button>
     </div>
-    <div class="text-xs text-gray-500 mt-1">密码长度至少6位，建议包含字母、数字和特殊字符</div>
+    <div class="text-xs text-gray-500 mt-1">
+      {{ type === 'update' ? '留空表示不修改密码' : '密码长度至少6位，建议包含字母、数字和特殊字符' }}
+    </div>
 </el-form-item>
              <!-- <el-form-item label="客户端登录用的密码哈希:" prop="passwordHash">
     <el-input v-model="formData.passwordHash" :clearable="true" placeholder="请输入客户端登录用的密码哈希" />
 </el-form-item> -->
              <el-form-item label="API密钥" prop="apiSecretKey">
-    <el-input v-model="formData.apiSecretKey" :clearable="true" placeholder="可选，自动生成" />
+    <div class="flex gap-2">
+      <el-input 
+        v-model="formData.apiSecretKey" 
+        :readonly="true" 
+        placeholder="点击按钮生成API密钥"
+        style="flex: 1; min-width: 400px;"
+      />
+      <el-button type="primary" @click="generateApiKey">{{ formData.apiSecretKey ? '重新生成' : '生成密钥' }}</el-button>
+    </div>
+    <div class="text-xs text-gray-500 mt-1">API密钥用于接口调用认证，请妥善保管</div>
+</el-form-item>
+             <el-form-item label="上级商户" prop="parentId">
+    <el-select 
+      v-model="formData.parentId" 
+      placeholder="请选择上级商户（可选）" 
+      clearable 
+      filterable
+      style="width: 100%"
+    >
+      <el-option 
+        v-for="customer in parentCustomersList" 
+        :key="customer.ID" 
+        :label="`${customer.merchantName} (${customer.merchantNo})`" 
+        :value="customer.ID"
+        :disabled="customer.ID === formData.ID"
+      />
+    </el-select>
+    <div class="text-xs text-gray-500 mt-1">可选择上级商户，建立层级关系</div>
 </el-form-item>
              <el-form-item label="余额" prop="balance">
     <el-input-number v-model="formData.balance" style="width:100%" :precision="2" :clearable="true" :disabled="true" />
@@ -253,6 +291,10 @@
 </el-descriptions-item>
                  <el-descriptions-item label="冻结金额">
     {{ detailForm.frozenAmount || 0 }}
+</el-descriptions-item>
+                 <el-descriptions-item label="上级商户">
+    <span v-if="detailForm.parentId">ID: {{ detailForm.parentId }}</span>
+    <span v-else class="text-gray-400">无上级</span>
 </el-descriptions-item>
                  <el-descriptions-item label="备注">
     {{ detailForm.remark || '-' }}
@@ -493,6 +535,7 @@ const showPassword = ref(false)
 
 // API密钥显示控制
 const showApiKey = ref(false)
+const parentCustomersList = ref([])
 
 // 自动化生成的字典（可能为空）以及字段
 const formData = ref({
@@ -505,6 +548,7 @@ const formData = ref({
             apiSecretKey: '',
             balance: 0,
             frozenAmount: 0,
+            parentId: undefined,
             remark: '',
             status: true, // 默认为正常状态
         })
@@ -659,6 +703,9 @@ const updateSmsCustomersFunc = async(row) => {
     type.value = 'update'
     if (res.code === 0) {
         formData.value = res.data
+        // 清空密码字段，避免显示旧密码
+        formData.value.password = ''
+        await loadParentCustomersList()
         dialogFormVisible.value = true
     }
 }
@@ -682,36 +729,53 @@ const deleteSmsCustomersFunc = async (row) => {
 // 弹窗控制标记
 const dialogFormVisible = ref(false)
 
+// 加载上级商户列表
+const loadParentCustomersList = async () => {
+  const res = await getSmsCustomersList({ page: 1, pageSize: 9999 })
+  if (res.code === 0) {
+    parentCustomersList.value = res.data.list || []
+  }
+}
+
 // 打开弹窗
-const openDialog = () => {
+const openDialog = async () => {
     type.value = 'create'
+    await loadParentCustomersList()
     dialogFormVisible.value = true
 }
 
 // 关闭弹窗
 const closeDialog = () => {
     dialogFormVisible.value = false
-    showPassword.value = false // 重置密码显示状态
     formData.value = {
+        merchantName: '',
+        merchantNo: '',
         username: '',
         email: '',
-        password: '', // 重置密码字段
+        password: '',
         passwordHash: '',
         apiSecretKey: '',
         balance: 0,
-        status: true, // 默认为正常状态
+        frozenAmount: 0,
+        parentId: undefined,
+        remark: '',
+        status: true,
         }
 }
+
 // 弹窗确定
 const enterDialog = async () => {
      btnLoading.value = true
      elFormRef.value?.validate( async (valid) => {
-             if (!valid) return btnLoading.value = false
+             if (!valid) {
+               btnLoading.value = false
+               return
+             }
               
               // 创建要发送的数据
               const submitData = { ...formData.value }
               
-              // 新增时需要密码，编辑时不需要
+              // 新增时需要密码，编辑时密码为空则不修改
               if (type.value === 'create') {
                 if (!submitData.password || submitData.password.length < 6) {
                   ElMessage({
@@ -722,8 +786,10 @@ const enterDialog = async () => {
                   return
                 }
               } else {
-                // 编辑时删除密码字段
-                delete submitData.password
+                // 编辑时，如果密码为空则删除密码字段（表示不修改密码）
+                if (!submitData.password) {
+                  delete submitData.password
+                }
               }
               
               let res
@@ -798,6 +864,42 @@ const generatePassword = () => {
       type: 'success', 
       message: '密码已生成：' + password
     })
+  })
+}
+
+// 生成 API 密钥
+const generateApiKey = () => {
+  ElMessageBox.confirm(
+    formData.value.apiSecretKey ? '确定要重新生成API密钥吗？旧密钥将失效' : '确定要生成新的API密钥吗？',
+    '提示',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    // 生成32位随机字符串
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    let apiKey = ''
+    for (let i = 0; i < 32; i++) {
+      apiKey += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    formData.value.apiSecretKey = apiKey
+    
+    // 复制到剪贴板
+    navigator.clipboard.writeText(apiKey).then(() => {
+      ElMessage({
+        type: 'success',
+        message: 'API密钥已生成并复制到剪贴板，请妥善保管'
+      })
+    }).catch(() => {
+      ElMessage({
+        type: 'success',
+        message: 'API密钥已生成，请妥善保管'
+      })
+    })
+  }).catch(() => {
+    // 用户取消
   })
 }
 
