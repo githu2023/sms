@@ -275,18 +275,52 @@ jobs:
         working-directory: sms-client
         run: flutter build web --release
 
-      - name: Upload SMS Client artifact
+      - name: Upload SMS Client Web artifact
         uses: actions/upload-artifact@v4
         with:
           name: sms-client-web
           path: sms-client/build/web
           retention-days: 7
 
+  build-sms-client-windows:
+    name: Build SMS Client Windows (Flutter)
+    runs-on: windows-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.sms-client == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.0'
+          channel: 'stable'
+
+      - name: Enable Windows desktop
+        working-directory: sms-client
+        run: flutter config --enable-windows-desktop
+
+      - name: Get Flutter dependencies
+        working-directory: sms-client
+        run: flutter pub get
+
+      - name: Build Flutter Windows
+        working-directory: sms-client
+        run: flutter build windows --release
+
+      - name: Upload SMS Client Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sms-client-windows
+          path: sms-client/build/windows/x64/runner/Release
+          retention-days: 7
+
   # 可选：将所有构建产物打包在一起
   package-all:
     name: Package All Builds
     runs-on: ubuntu-latest
-    needs: [build-admin-server-go, build-admin-server-web, build-goapi, build-sms-client]
+    needs: [build-admin-server-go, build-admin-server-web, build-goapi, build-sms-client, build-sms-client-windows]
     if: always()
     steps:
       - name: Download all artifacts
@@ -309,6 +343,9 @@ jobs:
           fi
           if [ -d sms-client-web ]; then
             cp -r sms-client-web release/sms-client-web
+          fi
+          if [ -d sms-client-windows ]; then
+            cp -r sms-client-windows release/sms-client-windows
           fi
 
       - name: Upload release package

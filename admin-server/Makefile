@@ -1,13 +1,16 @@
-.PHONY: linux web clean help
+.PHONY: linux web clean help package all
 
 # 构建输出目录
 BUILD_DIR := build
+PACKAGE_NAME := sms-platform-$(shell date +%Y%m%d_%H%M%S).zip
 
 # 默认目标
 help:
 	@echo "可用命令:"
-	@echo "  make linux  - 编译 Go 程序为 Linux 可执行文件（输出到 build/ 目录）"
+	@echo "  make linux   - 编译 Go 程序为 Linux 可执行文件（输出到 build/ 目录）"
 	@echo "  make web     - 编译打包前端项目（输出到 build/ 目录）"
+	@echo "  make package - 打包成 zip 文件"
+	@echo "  make all     - 编译并打包所有内容（推荐）"
 	@echo "  make clean   - 清理编译产物"
 
 # 编译 Go 程序为 Linux 可执行文件
@@ -39,5 +42,20 @@ clean:
 	@echo "正在清理编译产物..."
 	@rm -rf $(BUILD_DIR)
 	@rm -rf web/dist
+	@rm -f sms-platform-*.zip
 	@echo "清理完成！"
+
+# 打包成 zip 文件
+package:
+	@echo "正在打包..."
+	@if [ ! -d "$(BUILD_DIR)" ]; then \
+		echo "错误: build 目录不存在，请先运行 make linux 和 make web"; \
+		exit 1; \
+	fi
+	@cd $(BUILD_DIR) && zip -r ../$(PACKAGE_NAME) .
+	@echo "打包完成！文件: $(PACKAGE_NAME)"
+
+# 一键编译并打包
+all: clean linux web package
+	@echo "✅ 全部完成！发布包: $(PACKAGE_NAME)"
 
