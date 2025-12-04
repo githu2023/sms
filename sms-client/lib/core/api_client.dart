@@ -22,7 +22,8 @@ class ApiClient {
       return 'http://localhost:6060';
     } else {
       // 生产环境 - 请根据实际情况修改为你的服务器地址
-      return 'http://38.60.203.212:6060/v1';
+      // return 'http://38.60.203.212:6060/v1';
+      return "http://202.61.85.249:6060/v1";
     }
   }
   
