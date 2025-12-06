@@ -93,10 +93,12 @@ func IsProviderError(err error) bool {
 
 // Common error types for SMS providers
 var (
-	ErrProviderUnavailable = NewProviderError("PROVIDER_UNAVAILABLE", "Provider is currently unavailable")
-	ErrUnsupportedService  = NewProviderError("UNSUPPORTED_SERVICE", "Business type not supported by provider")
-	ErrNoPhoneAvailable    = NewProviderError("NO_PHONE_AVAILABLE", "No phone numbers available")
-	ErrCodeTimeout         = NewProviderError("CODE_TIMEOUT", "Timeout waiting for verification code")
-	ErrInvalidPhoneNumber  = NewProviderError("INVALID_PHONE", "Invalid phone number")
-	ErrProviderError       = NewProviderError("PROVIDER_ERROR", "Provider internal error")
+	ErrProviderUnavailable  = NewProviderError("PROVIDER_UNAVAILABLE", "Provider is currently unavailable")
+	ErrUnsupportedService   = NewProviderError("UNSUPPORTED_SERVICE", "Business type not supported by provider")
+	ErrNoPhoneAvailable     = NewProviderError("NO_PHONE_AVAILABLE", "No phone numbers available")
+	ErrCodeTimeout          = NewProviderError("CODE_TIMEOUT", "Timeout waiting for verification code")
+	ErrCodeNotReceived      = NewProviderError("CODE_NOT_RECEIVED", "Verification code not received yet")
+	ErrPhoneAlreadyReleased = NewProviderError("PHONE_ALREADY_RELEASED", "Phone number has already been released by provider")
+	ErrInvalidPhoneNumber   = NewProviderError("INVALID_PHONE", "Invalid phone number")
+	ErrProviderError        = NewProviderError("PROVIDER_ERROR", "Provider internal error")
 )

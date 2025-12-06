@@ -49,6 +49,8 @@ type SchedulerConfig struct {
 	CodeCheckInterval         int `mapstructure:"code_check_interval"`         // 验证码检查间隔 (秒)
 	CodeTimeout               int `mapstructure:"code_timeout"`                // 验证码获取超时时间 (秒)
 	AssignmentCleanupInterval int `mapstructure:"assignment_cleanup_interval"` // 过期分配清理间隔 (秒)
+	MaxConcurrentChecks       int `mapstructure:"max_concurrent_checks"`       // 最大并发检查数
+	ProviderRequestTimeout    int `mapstructure:"provider_request_timeout"`    // 运营商单次请求超时 (秒)
 }
 
 // LoggingConfig holds logging related configuration

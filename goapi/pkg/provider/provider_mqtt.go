@@ -213,119 +213,105 @@ func (p *MQTTProvider) GetCode(ctx context.Context, phoneNumber string, timeout 
 	zap.S().Infof("[MQTTProvider] ========== 获取验证码 - 开始 ==========")
 	zap.S().Infof("[MQTTProvider] 请求参数: phoneNumber=%s, extId=%s, timeout=%v", phoneNumber, extIdValue, timeout)
 
-	// 创建带超时的上下文
+	// 创建带超时的上下文（单次请求）
 	codeCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// 轮询获取验证码
-	ticker := time.NewTicker(2 * time.Second) // 每2秒查询一次
-	defer ticker.Stop()
+	// 构建URL - 单次查询，不轮询
+	apiURL := fmt.Sprintf("%s/mqtt/msg/getCode?extId=%s", p.apiGateway, url.QueryEscape(extIdValue))
+	zap.S().Infof("[MQTTProvider] 获取验证码 - URL: %s", apiURL)
 
-	startTime := time.Now()
-	pollCount := 0
-	for {
-		select {
-		case <-codeCtx.Done():
-			zap.S().Infof("[MQTTProvider] 获取验证码超时: phoneNumber=%s, extId=%s, 轮询次数=%d, 耗时=%v",
-				phoneNumber, extIdValue, pollCount, time.Since(startTime))
-			zap.S().Infof("[MQTTProvider] ========== 获取验证码 - 超时 ==========")
-			return nil, ErrCodeTimeout
-		case <-ticker.C:
-			pollCount++
-			// 构建URL
-			apiURL := fmt.Sprintf("%s/mqtt/msg/getCode?extId=%s", p.apiGateway, url.QueryEscape(extIdValue))
-			zap.S().Infof("[MQTTProvider] 获取验证码 - 第%d次轮询, URL: %s", pollCount, apiURL)
-
-			// 创建HTTP请求
-			req, err := http.NewRequestWithContext(codeCtx, "GET", apiURL, nil)
-			if err != nil {
-				zap.S().Errorf("[MQTTProvider] 创建请求失败: %v", err)
-				continue // 继续重试
-			}
-
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("User-Agent", "Go-HTTP-Client/1.1")
-
-			// 发送请求
-			resp, err := p.httpClient.Do(req)
-			if err != nil {
-				zap.S().Warnf("[MQTTProvider] 获取验证码API调用失败: provider=%s, phone=%s, ext_id=%s, 轮询次数=%d, error=%v",
-					p.info.ID, phoneNumber, extIdValue, pollCount, err)
-				continue // 继续重试
-			}
-
-			// 读取响应
-			respBody, err := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if err != nil {
-				zap.S().Errorf("[MQTTProvider] 读取响应失败: %v", err)
-				continue
-			}
-
-			zap.S().Infof("[MQTTProvider] 获取验证码 - 第%d次轮询响应: %s", pollCount, string(respBody))
-
-			// 解析响应
-			var apiResponse struct {
-				Code    int    `json:"code"`
-				Message string `json:"message"`
-				Data    struct {
-					ReceiveStatus int    `json:"receiveStatus"` // 0失败 1成功
-					Message       string `json:"message"`       // 短信内容
-					Error         string `json:"error"`         // 错误信息
-				} `json:"data"`
-			}
-
-			if err := json.Unmarshal(respBody, &apiResponse); err != nil {
-				zap.S().Warnf("[MQTTProvider] 解析验证码响应失败: provider=%s, error=%v", p.info.ID, err)
-				continue
-			}
-
-			// 输出完整响应数据
-			responseJSON, _ := json.Marshal(apiResponse)
-			zap.S().Infof("[MQTTProvider] 获取验证码 - 第%d次轮询响应详情: code=%d, message=%s, receiveStatus=%d, message=%s",
-				pollCount, apiResponse.Code, apiResponse.Message, apiResponse.Data.ReceiveStatus, apiResponse.Data.Message)
-			zap.S().Infof("[MQTTProvider] 获取验证码 - 完整响应数据(JSON): %s", string(responseJSON))
-
-			if apiResponse.Code != 0 {
-				// 如果返回错误，继续等待（在超时时间内）
-				if time.Since(startTime) < timeout {
-					zap.S().Warnf("[MQTTProvider] 获取验证码 - API返回错误但继续等待: code=%d, message=%s",
-						apiResponse.Code, apiResponse.Message)
-					continue
-				}
-				zap.S().Errorf("[MQTTProvider] ========== 获取验证码 - 失败 ==========")
-				zap.S().Infof("[MQTTProvider] 错误详情: code=%d, message=%s",
-					apiResponse.Code, apiResponse.Message)
-				return nil, NewProviderError("API_ERROR", apiResponse.Message)
-			}
-
-			// 检查接收状态
-			if apiResponse.Data.ReceiveStatus == 1 {
-				// 成功接收到短信
-				code := apiResponse.Data.Message
-				zap.S().Infof("[MQTTProvider] 获取验证码成功: phoneNumber=%s, extId=%s, code=%s, 轮询次数=%d, 耗时=%v",
-					phoneNumber, extIdValue, code, pollCount, time.Since(startTime))
-				zap.S().Infof("[MQTTProvider] ========== 获取验证码 - 成功 ==========")
-
-				return &CodeResponse{
-					Code:       code,
-					Message:    "验证码接收成功",
-					ReceivedAt: time.Now(),
-					ProviderID: p.info.ID,
-				}, nil
-			} else if apiResponse.Data.ReceiveStatus == 0 {
-				// 接收失败，但可能还在等待中
-				if time.Since(startTime) < timeout {
-					zap.S().Warnf("[MQTTProvider] 获取验证码 - 接收失败但继续等待: error=%s",
-						apiResponse.Data.Error)
-					continue
-				}
-				// 超时了，返回错误
-				zap.S().Errorf("[MQTTProvider] ========== 获取验证码 - 失败 ==========")
-				return nil, NewProviderError("RECEIVE_FAILED", apiResponse.Data.Error)
-			}
-		}
+	// 创建HTTP请求
+	req, err := http.NewRequestWithContext(codeCtx, "GET", apiURL, nil)
+	if err != nil {
+		zap.S().Errorf("[MQTTProvider] 创建请求失败: %v", err)
+		zap.S().Infof("[MQTTProvider] ========== 获取验证码 - 创建请求失败 ==========")
+		return nil, err
 	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Go-HTTP-Client/1.1")
+
+	// 发送请求
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		zap.S().Warnf("[MQTTProvider] 获取验证码API调用失败: provider=%s, phone=%s, ext_id=%s, error=%v",
+			p.info.ID, phoneNumber, extIdValue, err)
+		zap.S().Infof("[MQTTProvider] ========== 获取验证码 - API调用失败 ==========")
+		return nil, err
+	}
+
+	// 读取响应
+	respBody, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		zap.S().Errorf("[MQTTProvider] 读取响应失败: %v", err)
+		zap.S().Infof("[MQTTProvider] ========== 获取验证码 - 读取响应失败 ==========")
+		return nil, err
+	}
+
+	zap.S().Infof("[MQTTProvider] 获取验证码 - 响应: %s", string(respBody))
+
+	// 解析响应
+	var apiResponse struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    struct {
+			ReceiveStatus int    `json:"receiveStatus"` // 0失败 1成功
+			Message       string `json:"message"`       // 短信内容
+			Error         string `json:"error"`         // 错误信息
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(respBody, &apiResponse); err != nil {
+		zap.S().Warnf("[MQTTProvider] 解析验证码响应失败: provider=%s, error=%v", p.info.ID, err)
+		zap.S().Infof("[MQTTProvider] ========== 获取验证码 - 解析失败 ==========")
+		return nil, err
+	}
+
+	// 输出完整响应数据
+	responseJSON, _ := json.Marshal(apiResponse)
+	zap.S().Infof("[MQTTProvider] 获取验证码 - 响应详情: code=%d, message=%s, receiveStatus=%d, message=%s",
+		apiResponse.Code, apiResponse.Message, apiResponse.Data.ReceiveStatus, apiResponse.Data.Message)
+	zap.S().Infof("[MQTTProvider] 获取验证码 - 完整响应数据(JSON): %s", string(responseJSON))
+
+	if apiResponse.Code != 0 {
+		// 检查是否是 "already release" 错误
+		if apiResponse.Message == "already release" {
+			zap.S().Warnf("[MQTTProvider] 手机号已被运营商释放: phoneNumber=%s, extId=%s", phoneNumber, extIdValue)
+			zap.S().Infof("[MQTTProvider] ========== 获取验证码 - 已释放 ==========")
+			return nil, ErrPhoneAlreadyReleased
+		}
+		zap.S().Errorf("[MQTTProvider] ========== 获取验证码 - 失败 ==========")
+		zap.S().Infof("[MQTTProvider] 错误详情: code=%d, message=%s",
+			apiResponse.Code, apiResponse.Message)
+		return nil, NewProviderError("API_ERROR", apiResponse.Message)
+	}
+
+	// 检查接收状态
+	if apiResponse.Data.ReceiveStatus == 1 {
+		// 成功接收到短信
+		code := apiResponse.Data.Message
+		zap.S().Infof("[MQTTProvider] 获取验证码成功: phoneNumber=%s, extId=%s, code=%s",
+			phoneNumber, extIdValue, code)
+		zap.S().Infof("[MQTTProvider] ========== 获取验证码 - 成功 ==========")
+
+		return &CodeResponse{
+			Code:       code,
+			Message:    "验证码接收成功",
+			ReceivedAt: time.Now(),
+			ProviderID: p.info.ID,
+		}, nil
+	} else if apiResponse.Data.ReceiveStatus == 0 {
+		// 还未接收到短信
+		zap.S().Infof("[MQTTProvider] 验证码暂未接收: phoneNumber=%s, extId=%s", phoneNumber, extIdValue)
+		zap.S().Infof("[MQTTProvider] ========== 获取验证码 - 暂未接收 ==========")
+		return nil, ErrCodeNotReceived
+	}
+
+	// 未知状态
+	zap.S().Warnf("[MQTTProvider] 未知的接收状态: %d", apiResponse.Data.ReceiveStatus)
+	return nil, NewProviderError("UNKNOWN_STATUS", "未知的接收状态")
 }
 
 // ReleasePhone 释放手机号

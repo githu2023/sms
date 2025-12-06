@@ -10,6 +10,7 @@ import 'change_password_page.dart';
 import 'get_phone_page.dart';
 import 'get_code_page.dart';
 import 'transaction_history_page.dart';
+import 'assignment_history_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -85,14 +86,19 @@ class _HomePageState extends State<HomePage> {
       ),
       body: _buildBody(l10n, user),
       bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.home),
             label: '主页',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.phone_android),
+            label: '分配记录',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.receipt_long),
-            label: '余额记录',
+            label: '余额变动',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
@@ -110,8 +116,10 @@ class _HomePageState extends State<HomePage> {
       case 0:
         return '主页';
       case 1:
-        return '余额记录';
+        return '分配记录';
       case 2:
+        return '余额变动';
+      case 3:
         return '设置';
       default:
         return l10n.appTitle;
@@ -123,8 +131,10 @@ class _HomePageState extends State<HomePage> {
       case 0:
         return _buildHomeTab(l10n, user);
       case 1:
-        return const TransactionHistoryPage();
+        return const AssignmentHistoryPage();
       case 2:
+        return const TransactionHistoryPage();
+      case 3:
         return _buildSettingsTab(l10n);
       default:
         return const SizedBox();

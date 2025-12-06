@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sms-platform/goapi/internal/config"
 	"sms-platform/goapi/internal/domain"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 )
 
@@ -121,8 +123,22 @@ func (s *SchedulerService) checkPendingCodes() {
 
 	zap.S().Infof("Found %d pending assignments to check for codes", len(assignments))
 
+	// 使用 errgroup 并发处理，限制并发数
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(s.cfg.MaxConcurrentChecks) // 限制并发数
+
 	for _, assignment := range assignments {
-		s.processAssignment(ctx, assignment)
+		// 避免闭包问题，复制一份
+		assign := assignment
+		g.Go(func() error {
+			s.processAssignment(gctx, assign)
+			return nil // 不返回错误，让所有 goroutine 都执行完
+		})
+	}
+
+	// 等待所有并发任务完成
+	if err := g.Wait(); err != nil {
+		zap.S().Errorf("Error processing assignments concurrently: %v", err)
 	}
 }
 
@@ -217,6 +233,57 @@ func (s *SchedulerService) markAssignmentAsExpired(ctx context.Context, assignme
 	}
 }
 
+// markAssignmentAsExpiredWithoutRelease 标记分配为已过期，处理退款，但不释放手机号（因为运营商已释放）
+func (s *SchedulerService) markAssignmentAsExpiredWithoutRelease(ctx context.Context, assignment *domain.PhoneAssignment) {
+	expiredStatus := "expired"
+	assignment.Status = &expiredStatus
+	assignment.UpdatedAt = time.Now()
+
+	if assignment.Remark == nil {
+		remark := "手机号已被运营商释放"
+		assignment.Remark = &remark
+	}
+
+	// 开始数据库事务用于更新分配状态
+	tx := s.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := s.assignmentRepo.Update(ctx, tx, assignment); err != nil {
+		tx.Rollback()
+		zap.S().Errorf("Error marking assignment %d as expired: %v", assignment.ID, err)
+		return
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		zap.S().Errorf("Error committing expired assignment %d: %v", assignment.ID, err)
+		return
+	}
+
+	// 如果已扣费，需要退款到余额
+	if assignment.CustomerID != nil && assignment.MerchantFee != nil && *assignment.MerchantFee > 0 {
+		customerID := *assignment.CustomerID
+		refundAmount := *assignment.MerchantFee
+		notes := fmt.Sprintf("手机号已被运营商释放退款: %s (分配ID: %d)",
+			getPhoneNumber(assignment.PhoneNumber), assignment.ID)
+
+		if _, err := s.transactionSvc.Refund(ctx, customerID, refundAmount, assignment.ID, notes); err != nil {
+			zap.S().Errorf("Error refunding for expired assignment %d: %v", assignment.ID, err)
+		} else {
+			zap.S().Infof("Assignment %d marked as expired (already released by provider) and refunded %.2f to customer %d",
+				assignment.ID, refundAmount, customerID)
+		}
+	} else {
+		zap.S().Infof("Assignment %d marked as expired (already released by provider, no refund needed)", assignment.ID)
+	}
+
+	zap.S().Infof("Assignment %d marked as expired - phone already released by provider", assignment.ID)
+	// 注意：不调用 releasePhoneNumber，因为运营商已经释放了
+}
+
 // getPhoneNumber 安全获取手机号字符串
 func getPhoneNumber(phone *string) string {
 	if phone == nil {
@@ -253,8 +320,9 @@ func (s *SchedulerService) tryGetCode(ctx context.Context, assignment *domain.Ph
 		return
 	}
 
-	// 设置较短的超时时间避免阻塞
-	codeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	// 设置较短的超时时间避免阻塞（使用配置的单次请求超时）
+	requestTimeout := time.Duration(s.cfg.ProviderRequestTimeout) * time.Second
+	codeCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
 	// 调用provider接口获取验证码
@@ -262,12 +330,30 @@ func (s *SchedulerService) tryGetCode(ctx context.Context, assignment *domain.Ph
 	var codeResponse *provider.CodeResponse
 	if assignment.ExtId != nil && *assignment.ExtId != "" {
 		// 使用 extId 获取验证码
-		codeResponse, err = providerInstance.GetCode(codeCtx, *assignment.PhoneNumber, 10*time.Second, *assignment.ExtId)
+		codeResponse, err = providerInstance.GetCode(codeCtx, *assignment.PhoneNumber, requestTimeout, *assignment.ExtId)
 	} else {
 		// 使用 phoneNumber 获取验证码（兼容旧数据）
-		codeResponse, err = providerInstance.GetCode(codeCtx, *assignment.PhoneNumber, 10*time.Second)
+		codeResponse, err = providerInstance.GetCode(codeCtx, *assignment.PhoneNumber, requestTimeout)
 	}
 	if err != nil {
+		// 判断是否是"暂未接收"错误
+		if errors.Is(err, provider.ErrCodeNotReceived) {
+			// 这是正常情况，验证码还没发送，等待下次检查
+			zap.S().Debugf("Verification code not received yet for assignment %d (phone: %s)",
+				assignment.ID, *assignment.PhoneNumber)
+			return
+		}
+
+		// 判断是否是"已释放"错误
+		if errors.Is(err, provider.ErrPhoneAlreadyReleased) {
+			// 手机号已被运营商释放，直接标记为过期，不需要再释放
+			zap.S().Infof("Phone number already released by provider for assignment %d, marking as expired without release",
+				assignment.ID)
+			s.markAssignmentAsExpiredWithoutRelease(ctx, assignment)
+			return
+		}
+
+		// 其他错误，记录失败次数
 		// 记录错误但不标记为失败，等待下次检查
 		if assignment.FetchCount == nil {
 			fetchCount := 1

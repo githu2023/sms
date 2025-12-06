@@ -41,6 +41,46 @@ class MyApp extends StatelessWidget {
             ],
             supportedLocales: const [Locale('zh'), Locale('en')],
 
+            // 限制最大宽度，保持移动端样式（H5样式）
+            builder: (context, child) {
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  // 移动端最大宽度（类似手机屏幕宽度）
+                  const double maxMobileWidth = 600.0;
+                  
+                  // 如果屏幕宽度超过移动端宽度，居中显示并限制宽度
+                  if (constraints.maxWidth > maxMobileWidth) {
+                    return Container(
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                      child: Center(
+                        child: Container(
+                          width: maxMobileWidth,
+                          constraints: BoxConstraints(
+                            maxWidth: maxMobileWidth,
+                            minHeight: constraints.maxHeight,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).scaffoldBackgroundColor,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 10,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: child,
+                        ),
+                      ),
+                    );
+                  }
+                  
+                  // 移动端直接显示
+                  return child!;
+                },
+              );
+            },
+
             // 路由配置 - 启动时检查登录状态
             home: const SplashPage(),
           );

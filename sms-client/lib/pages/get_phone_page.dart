@@ -461,43 +461,87 @@ class _GetPhonePageState extends State<GetPhonePage> {
                         ],
                       ))),
 
-                    // 最近的历史记录
-                    if (_recentAssignments.isNotEmpty) ...[
-                      const SizedBox(height: 24),
-                      Text(
-                        l10n.recentRecords,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    // 分隔线
+                    const SizedBox(height: 32),
+                    const Divider(thickness: 2, height: 2),
+                    const SizedBox(height: 24),
+
+                    // 最近的历史记录 - 固定在底部
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      Text(
-                        l10n.pullDownToRefresh,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.grey,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      ...(_recentAssignments.map((assignment) =>
-                          AssignmentCard(
-                            assignment: assignment,
-                            onRefresh: _loadRecentAssignments,
-                          ))),
-                      if (_isLoadingHistory)
-                        const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Center(child: CircularProgressIndicator()),
-                        ),
-                      if (!_hasMoreHistory && _recentAssignments.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Center(
-                            child: Text(
-                              l10n.noMoreData,
-                              style: TextStyle(color: Colors.grey),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.history,
+                                  color: Theme.of(context).primaryColor,
+                                  size: 24,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  l10n.recentRecords,
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                    ],
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              l10n.pullDownToRefresh,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          if (_recentAssignments.isEmpty && !_isLoadingHistory)
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Center(
+                                child: Text(
+                                  l10n.noData,
+                                  style: TextStyle(color: Colors.grey),
+                                ),
+                              ),
+                            )
+                          else
+                            ...(_recentAssignments.map((assignment) =>
+                                AssignmentCard(
+                                  assignment: assignment,
+                                  onRefresh: _loadRecentAssignments,
+                                ))),
+                          if (_isLoadingHistory)
+                            const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Center(child: CircularProgressIndicator()),
+                            ),
+                          if (!_hasMoreHistory && _recentAssignments.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Center(
+                                child: Text(
+                                  l10n.noMoreData,
+                                  style: TextStyle(color: Colors.grey),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),
