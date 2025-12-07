@@ -300,96 +300,148 @@ class _GetPhonePageState extends State<GetPhonePage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Card Type Selection
+                    // Card Type and Count Selection (合并到一行)
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
-                        child: Column(
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              l10n.selectCardType,
-                              style: Theme.of(context).textTheme.titleMedium,
+                            // 左边：卡类型选择
+                            Expanded(
+                              flex: 3,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    l10n.selectCardType,
+                                    style: Theme.of(context).textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: InkWell(
+                                          onTap: () {
+                                            setState(() {
+                                              _selectedCardType = 'physical';
+                                            });
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(vertical: 8),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Radio<String>(
+                                                  value: 'physical',
+                                                  groupValue: _selectedCardType,
+                                                  onChanged: (value) {
+                                                    setState(() {
+                                                      _selectedCardType = value!;
+                                                    });
+                                                  },
+                                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                ),
+                                                Flexible(
+                                                  child: Text(
+                                                    l10n.physicalCard,
+                                                    style: const TextStyle(fontSize: 14),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: InkWell(
+                                          onTap: () {
+                                            setState(() {
+                                              _selectedCardType = 'virtual';
+                                            });
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(vertical: 8),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Radio<String>(
+                                                  value: 'virtual',
+                                                  groupValue: _selectedCardType,
+                                                  onChanged: (value) {
+                                                    setState(() {
+                                                      _selectedCardType = value!;
+                                                    });
+                                                  },
+                                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                ),
+                                                Flexible(
+                                                  child: Text(
+                                                    l10n.virtualCard,
+                                                    style: const TextStyle(fontSize: 14),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: RadioListTile<String>(
-                                    title: Text(l10n.physicalCard),
-                                    value: 'physical',
-                                    groupValue: _selectedCardType,
+                            const SizedBox(width: 16),
+                            // 右边：数量选择
+                            Expanded(
+                              flex: 2,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    l10n.requestCount,
+                                    style: Theme.of(context).textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  DropdownButtonFormField<int>(
+                                    value: _requestedCount,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 12,
+                                      ),
+                                      isDense: true,
+                                    ),
+                                    items: List.generate(
+                                      10,
+                                      (index) => DropdownMenuItem(
+                                        value: index + 1,
+                                        child: Text('${index + 1}'),
+                                      ),
+                                    ),
                                     onChanged: (value) {
+                                      if (value == null) return;
                                       setState(() {
-                                        _selectedCardType = value!;
+                                        _requestedCount = value;
                                       });
                                     },
-                                    contentPadding: EdgeInsets.zero,
                                   ),
-                                ),
-                                Expanded(
-                                  child: RadioListTile<String>(
-                                    title: Text(l10n.virtualCard),
-                                    value: 'virtual',
-                                    groupValue: _selectedCardType,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _selectedCardType = value!;
-                                      });
-                                    },
-                                    contentPadding: EdgeInsets.zero,
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    l10n.requestCountHelper,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(color: Colors.grey, fontSize: 10),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(height: 16),
-
-                    // Count Selection
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              l10n.requestCount,
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 12),
-                            DropdownButtonFormField<int>(
-                              value: _requestedCount,
-                              decoration: const InputDecoration(
-                                border: OutlineInputBorder(),
-                              ),
-                              items: List.generate(
-                                10,
-                                (index) => DropdownMenuItem(
-                                  value: index + 1,
-                                  child: Text('${index + 1}'),
-                                ),
-                              ),
-                              onChanged: (value) {
-                                if (value == null) return;
-                                setState(() {
-                                  _requestedCount = value;
-                                });
-                              },
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              l10n.requestCountHelper,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
 
                     // Assign Button
                     FilledButton.icon(
@@ -418,12 +470,14 @@ class _GetPhonePageState extends State<GetPhonePage> {
                     ),
                     const SizedBox(height: 24),
 
-                    // 显示所有分配结果（最新的在上面）
+                    // 显示所有分配结果（最新的在上面）- 优化：直接显示手机号，简化摘要信息
                     if (_assignmentResults.isNotEmpty)
                       ...(_assignmentResults.map((result) => Column(
                         children: [
-                          _buildSummaryCard(context, l10n, result),
-                          const SizedBox(height: 16),
+                          // 简化摘要卡片，只显示关键信息
+                          if (result.phones.isNotEmpty)
+                            _buildCompactSummaryCard(context, l10n, result),
+                          const SizedBox(height: 12),
                           if (result.phones.isEmpty)
                             Card(
                               child: Padding(
@@ -455,9 +509,9 @@ class _GetPhonePageState extends State<GetPhonePage> {
                                       )
                                       .toList(),
                             ),
-                          const SizedBox(height: 24),
-                          const Divider(thickness: 2),
                           const SizedBox(height: 16),
+                          const Divider(thickness: 1),
+                          const SizedBox(height: 12),
                         ],
                       ))),
 
@@ -550,6 +604,79 @@ class _GetPhonePageState extends State<GetPhonePage> {
   }
 
 
+  // 紧凑的摘要卡片 - 只显示关键信息，节省空间
+  Widget _buildCompactSummaryCard(
+    BuildContext context,
+    AppLocalizations l10n,
+    PhoneAssignmentResult result,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildCompactInfoItem(
+            Icons.attach_money,
+            _formatAmount(result.totalCost),
+            l10n.totalCostLabel,
+          ),
+          Container(width: 1, height: 30, color: Colors.grey[300]),
+          _buildCompactInfoItem(
+            Icons.account_balance_wallet,
+            _formatAmount(result.remainingBalance),
+            l10n.remainingBalanceLabel,
+          ),
+          Container(width: 1, height: 30, color: Colors.grey[300]),
+          _buildCompactInfoItem(
+            Icons.check_circle,
+            '${result.successCount}/${result.successCount + result.failedCount}',
+            '成功',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactInfoItem(IconData icon, String value, String label) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 14, color: Colors.grey[700]),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.grey[600],
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSummaryCard(
     BuildContext context,
     AppLocalizations l10n,
@@ -640,120 +767,121 @@ class _GetPhonePageState extends State<GetPhonePage> {
     }
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      elevation: 3,
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      elevation: 2,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 手机号和复制按钮
+            // 手机号和复制按钮 - 更紧凑
             Row(
               children: [
                 Icon(
                   Icons.phone_android,
                   color: Theme.of(context).primaryColor,
-                  size: 28,
+                  size: 24,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     phone.phoneNumber,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 20,
-                      letterSpacing: 1.2,
+                      fontSize: 18,
+                      letterSpacing: 1.0,
                     ),
                   ),
                 ),
-                IconButton.filled(
+                IconButton(
                   onPressed: () => _copyPhone(phone.phoneNumber),
-                  icon: const Icon(Icons.copy, size: 20),
+                  icon: const Icon(Icons.copy, size: 18),
                   tooltip: l10n.copyPhone,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
             
-            // 信息网格
+            // 信息网格 - 更紧凑
             Row(
               children: [
                 Expanded(
-                  child: _buildInfoItem(
+                  child: _buildCompactPhoneInfoItem(
                     Icons.public,
-                    l10n.countryCode,
                     phone.countryCode,
+                    l10n.countryCode,
                   ),
                 ),
                 Expanded(
-                  child: _buildInfoItem(
+                  child: _buildCompactPhoneInfoItem(
                     Icons.store,
-                    l10n.providerLabel,
                     phone.providerId,
+                    l10n.providerLabel,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
-                  child: _buildInfoItem(
+                  child: _buildCompactPhoneInfoItem(
                     Icons.schedule,
-                    l10n.validUntilLabel,
                     _formatDate(phone.validUntil),
+                    l10n.validUntilLabel,
                   ),
                 ),
                 Expanded(
-                  child: _buildInfoItem(
+                  child: _buildCompactPhoneInfoItem(
                     Icons.attach_money,
-                    l10n.cost,
                     _formatAmount(phone.cost),
+                    l10n.cost,
                   ),
                 ),
               ],
             ),
             
-            // 验证码显示或获取按钮
+            // 验证码显示或获取按钮 - 更紧凑
             if (verificationCode != null) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: Colors.green.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green, width: 2),
+                  border: Border.all(color: Colors.green, width: 1.5),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.verified, color: Colors.green, size: 24),
-                    const SizedBox(width: 12),
+                    const Icon(Icons.verified, color: Colors.green, size: 20),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            l10n.code,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
                             verificationCode,
                             style: const TextStyle(
-                              fontSize: 24,
+                              fontSize: 20,
                               fontWeight: FontWeight.bold,
                               color: Colors.green,
-                              letterSpacing: 2,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                          Text(
+                            l10n.code,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    IconButton.filled(
+                    IconButton(
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: verificationCode!));
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -763,7 +891,9 @@ class _GetPhonePageState extends State<GetPhonePage> {
                           ),
                         );
                       },
-                      icon: const Icon(Icons.copy),
+                      icon: const Icon(Icons.copy, size: 18),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                       style: IconButton.styleFrom(
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
@@ -773,20 +903,20 @@ class _GetPhonePageState extends State<GetPhonePage> {
                 ),
               ),
             ] else ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () => _fetchCodeForNewPhone(phone.phoneNumber),
-                  icon: const Icon(Icons.sms, size: 20),
+                  icon: const Icon(Icons.sms, size: 18),
                   label: Text(
                     l10n.getCode,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -797,6 +927,39 @@ class _GetPhonePageState extends State<GetPhonePage> {
           ],
         ),
       ),
+    );
+  }
+
+  // 紧凑版手机号信息项 - 值在上，标签在下
+  Widget _buildCompactPhoneInfoItem(IconData icon, String value, String label) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: Colors.grey[600]),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.grey[600],
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
